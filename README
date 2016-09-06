@@ -1,0 +1,24 @@
+/*
+ *
+ *
+ *   Libfre library  -  Perl-like regular expression on POSIX ERE engine.
+ *
+ *
+ */
+
+
+This small library will give user the access to one simple function:
+
+fre_bind(perl-like_regex_pattern, string);
+
+which tries to mimic as closely as possible Perl's bind operator '=~' that
+binds a regex pattern against a string, executing the operation designated by
+the pattern used
+
+The user's given Perl-like regular expression will then be parsed internaly
+by the library
+
+'fre' stands for "Findf Regular Expression" since it was first born within the Libfindf library,
+and I'm not very original with names.
+
+I will carefuly explain what the fre_bind() function does once I get it sorted out! :)

@@ -2,6 +2,9 @@
  *
  *  Libfindf library: Private FRE regex utilities.
  *
+                TOOK FROM LIBFINDF       MUST BE MODIFIED           DO NOT USE AS IS !!
+ *
+ *
  */
 
 #ifndef FINDF_PRIVATE_REGEX_HEADER

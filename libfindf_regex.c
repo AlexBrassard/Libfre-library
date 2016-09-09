@@ -482,6 +482,12 @@ int intern__findf__strip_match(char *pattern,
     /* Handle patterns containing non-paired delimiters. */
     else {
       if (MTOKEN == freg_object->delimiter){
+	/* 
+	 * Note for Libfre: 
+	 * Check the previous token, if it happened to be a '\'
+	 * the delimiter token must be taken literally and added to the pattern stack.
+	 * In this case the numof_seen_delimiter must not be incremented.
+	 */
 	++token_ind;
 	++numof_seen_delimiter;
 	continue;
@@ -517,7 +523,11 @@ int intern__findf__strip_match(char *pattern,
 #undef MTOKEN
 } /* intern__findf__strip_match() */
 
-
+/*
+ * Note for Libfre:
+ * A substitution/transliteration pattern of the form:
+ * s<bob><lola>  is perfectly valid, look out for it.
+ */
 /* Parse a substitution-style pattern. */
 int intern__findf__strip_substitute(char *pattern,
 				    size_t token_ind,

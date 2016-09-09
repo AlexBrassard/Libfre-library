@@ -1,0 +1,42 @@
+/*
+ *
+ *  Libfre  -  Complete routine list.
+ *
+ */
+---- Nothing has been made.
+P--- Pseudo-coded.
+-C-- Coded.
+--M- Is a MACRO.
+---O Is obsolete but kept for some reasons.
+
+PCMO	      function_name	   file(abreviation) Description
+
+/** Intern API **/
+P--- 	      intern__fre__init_pattern      utils.c Allocate memory for a fre_pattern* object.
+----	      intern__fre__free_pattern      utils.c Deallocate memory of a fre_pattern* object.
+P---	      intern__fre__init_smatch	     utils.c Allocate memory for a fre_smatch* object.
+P---	      intern__fre__free_smatch	     utils.c Deallocate memory for a fre_smatch* object.
+P---	      intern__fre__init_pmatch_node  utils.c Allocate memory for a single node of type fre_pmatch*.
+P---	      intern__fre__free_pmatch_node  utils.c Deallocate memory for a single node of type fre_pmatch*.
+P---	      intern__fre__free_pmatch_tab   utils.c Deallocate memory for each nodes of the global pmatch_table.
+--M-	      intern__fre__push		     utils.c Push a given token on the given tos of the given stack.
+P---	      intern__fre__skip_comments     utils.c Skip commentary in extended Perl-like patterns.
+P---	      intern__fre__certify_esc_seq   utils.c Verify escape sequences, replacing non-supported for supported constructs.
+P---	      intern__fre__fetch_modifiers   utils.c Fetches and validate modifiers.
+P---	      intern__fre__strip_pattern     utils.c Strip off a pattern from its Perl-like elements.
+----	      intern__fre__compile_pattern   utils.c Compile the converted Perl-like pattern.
+P---	      intern__fre__pmatch_location   init.c  Returns the address of a per-thread pmatch_table.
+P---	      intern__fre__lib_init	     init.c  Initializes the library (mostly for pmatch_table).
+P---	      intern__fre__lib_finit	     init.c  Terminate the library (mostly for pmatch_table).
+P---	      intern__fre__free_pthread_key  init.c  Used by pthread_key_create to free a TSD key.
+P---	      intern__fre__plp_parser	     main.c  Parse the given Perl-like pattern.
+P---	      intern__fre__perl_to_posix     main.c  Convert a stripped-off, perl-like pattern into a POSIX conformant pattern.
+P---	      intern__fre__match_op	     main.c  Execute a matching operation.
+----	      intern__fre__substitute_op     main.c  Execute a substitution operation.
+----	      intern__fre__transliterate_op  main.c  Execute a transliteration operation.
+
+--M-	      intern__fre__errmesg		Print a debug/error message.
+
+
+/** Public API **/
+----	      fre_bind			        Binds pattern to string and execute pattern's operation. 

@@ -1,0 +1,10 @@
+# Testing internal function at the moment.
+
+libfre.so{
+	global:
+	   intern_fre_init_bref_arr; intern__fre__free_bref_arr;
+
+	local:
+	   *;
+
+};

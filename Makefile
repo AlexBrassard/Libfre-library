@@ -3,7 +3,7 @@
 # Libre library's Makefile
 #
 # V0.0.1
-##
+##-Wl,--version-script=${PWD}/libfre_export.map ${LDFLAGS}
 ##############################
 
 # GCC compile flags
@@ -25,7 +25,7 @@ OBJECTS = fre_internal_utils.o fre_internal_init.o
 libname = libfre.so.0.0.1
 
 ${libname} : ${OBJECTS} fre_internal.h 
-	${CC} ${CFLAGS} -shared ${OBJECTS} -o ${libname} -Wl,--version-script=${PWD}/libfre_export.map ${LDFLAGS}
+	${CC} ${CFLAGS} -shared ${OBJECTS} -o ${libname} ${LDFLAGS}
 
 fre_internal_utils.o : fre_internal_utils.c fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_utils.c ${LDFLAGS}

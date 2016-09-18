@@ -27,7 +27,7 @@ typedef struct fre_sm{
 
 /* Per-thread global sub-match table kept between invocations of fre_bind(). */
 typedef struct fre_pmatch_tab {
-  bool                  fre_modif_global; /* True when /g is activated, pmatch_table will contain extra nodes. */
+  bool                  fre_mod_global; /* True when /g is activated, pmatch_table will contain extra nodes. */
   /* Determined by the values in regmatch_t[]. */
   fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
   fre_smatch            **sub_match;      /* Array of sub-match offsets. */
@@ -91,7 +91,7 @@ typedef struct fpattern {
 
   /* Patterns */
   regex_t  *comp_pattern;          /* The compiled regex pattern. */
-  char     *original_pattern;      /* The original, unmodified pattern. */  
+  //  char     *original_pattern;      /* The original, unmodified pattern. */  
   char     **striped_pattern;      /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
 
 } fre_pattern;
@@ -106,7 +106,12 @@ typedef struct fpattern {
 # define FRE_MAX_SUB_MATCHES           100     /* Maximum number of submatches. */
 # define FRE_PMATCH_TABLE_SIZE         256     /* Arbitrary. */
 
-/* Setting FRE_ARG_STRING_MAX_LENGHT to a bigger value than INT_MAX might result in overflow. */
+/* 
+ * Setting FRE_ARG_STRING_MAX_LENGHT to a smaller value 
+ * than INT_MAX might result in overflow. 
+ * Setting FRE_ARG_STRING_MAX_LENGHT to a value bigger than
+ * INT_MAX might result in lost of information.
+ */
 # define FRE_ARG_STRING_MAX_LENGHT     INT_MAX /* Maximum lenght of fre_bind()'s string argument, '\0' included. */
 
 # define FRE_OP_SUCCESSFUL             1       /* Indicate a successful operation. */
@@ -131,13 +136,19 @@ static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0-9]"; /* Used mostly to repl
 /** Internal function prototypes **/
 
 /* Library's init/finit. */
-int intern__fre__lib_init(void);                  /* Initialize the library's globals. */
-void intern__fre__lib_finit(void);                /* Free the library's globals memory. */
+int          intern__fre__lib_init(void);                          /* Initialize the library's globals. */
+void         intern__fre__lib_finit(void);                         /* Free the library's globals memory. */
 
 
 /* Memory allocation/deallocation routines. */
-fre_backref* intern__fre__init_bref_arr(void);          /* Init an object to hold positions of back-refs inside a pattern. */
-void intern__fre__free_bref_arr(fre_backref *to_free);  /* Free resources of a fre_backref * inited by _init_bref_arr(). */
+fre_backref* intern__fre__init_bref_arr(void);                     /* Allocate memory to a fre_backref* object. */
+void         intern__fre__free_bref_arr(fre_backref *to_free);     /* Free resources of a fre_backref *. */
+/* There's no _free_smatch(), _free_pmatch_node handles this. */
+fre_smatch*  intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
+fre_pmatch*  intern__fre__init_pmatch_node(fre_pmatch *headnode);  /* Allocate memory to a single node of the pmatch_table. */
+void         intern__fre__free_pmatch_node(fre_pmatch *node);      /* Free resources of a single node of the pmatch_table. */
+void         intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the whole headnode pmatch linked-list. */
+fre_pattern* intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
+void         intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
 
-void intern_line_test(void);
 #endif /* FRE_INTERNAL_HEADER */

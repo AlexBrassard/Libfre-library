@@ -14,6 +14,7 @@
 
 #include "fre_internal.h"
 
+/** Memory Allocation Functions **/
 
 /* 
  * Allocate memory for arrays holding possible 
@@ -321,5 +322,101 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
 
   free(freg_object);
 
+  return;
+}
+
+
+/** Regex Parser Utility Functions. **/
+
+/*
+ * MACRO - Add current token to the given stack and
+ * update the given stack's TOS.
+ */
+#define intern__fre__push(token, stack, tos) do {	\
+    stack[*tos] = token;				\
+    ++(*tos);						\
+  } while (0) ;
+
+
+/* 
+ * Skip all tokens until a newline or a NULL is found, 
+ * then trim the pattern's lenght by the ammount of tokens we just skipped.
+ */
+int intern__fre__skip_comments(char *pattern,
+			       size_t *pattern_len,
+			       size_t *token_ind)
+{
+  size_t i = 0;                              /* Number of tokens skipped. */
+
+
+
+
+  /* HAVE NOT BEEN TESTED ONCE YET */
+
+
+
+
+
+
+  while(pattern[*token_ind] != '\n'
+	&& pattern[*token_ind] != '\0'){
+    ++(*token_ind);
+    ++i;
+  }
+  /* Adjust the pattern's lenght, first check for overflow. */
+  if (((*pattern_len) - i) > 0
+      && ((*pattern_len) - i) < FRE_MAX_PATTERN_LENGHT){
+    (*pattern_len) -= i;
+  }
+  else {
+    errno = 0; /* Make sure errno is not set, else _errmesg will call perror() */
+    intern__fre__errmesg("Intern__fre__skip_comments failed to adjust pattern's lenght");
+    errno = EOVERFLOW;
+    return FRE_ERROR;
+  }
+  return FRE_OP_SUCCESSFUL;
+
+} /* intern__fre__skip_comments() */
+
+
+
+
+
+/* 
+ * Debug hook
+ * Print all values of a given fre_pattern object.
+ */
+void print_pattern_hook(fre_pattern* pat)
+{
+  if (pat == NULL){
+    pthread_mutex_lock(&fre_stderr_mutex);
+    fprintf(stderr, "Pattern is NULL\n");
+    pthread_mutex_unlock(&fre_stderr_mutex);
+    return;
+  }
+  pthread_mutex_lock(&fre_stderr_mutex);
+  fprintf(stderr, "fre_mod_boleol %s\nfre_mod_newline %s\nfre_mod_icase %s\nfre_mod_ext %s\nfre_mod_global %s\n",
+	  ((pat->fre_mod_boleol == true) ? "true" : "false"),
+	  ((pat->fre_mod_newline == true) ? "true" : "false"),
+	  ((pat->fre_mod_icase == true) ? "true" : "false"),
+	  ((pat->fre_mod_ext == true) ? "true" : "false"),
+	  ((pat->fre_mod_global == true) ? "true" : "false"));
+  fprintf(stderr, "fre_p1_compiled %s\nfre_paired_delimiters %s\nDelimiter [%c]\tC_Delimiter [%c]\n",
+	  ((pat->fre_p1_compiled == true) ? "true" : "false"),
+	  ((pat->fre_paired_delimiters == true) ? "true" : "false"),
+	  pat->delimiter, pat->c_delimiter);
+  fprintf(stderr, "Operation type: %s\nfre_op_bref %s\n",
+	  ((pat->fre_op_flag == NONE) ? "NONE" :
+	   (pat->fre_op_flag == MATCH) ? "MATCH" :
+	   (pat->fre_op_flag == SUBSTITUTE) ? "SUBSTITUTE" :
+	   (pat->fre_op_flag == TRANSLITERATE) ? "TRANSLITERATE" : "Error, invalid flag"),
+	  ((pat->fre_op_bref == true) ? "true" : "false"));
+  fprintf(stderr, "backref_pos %s\noperation %s\ncomp_pattern %s\n",
+	  ((pat->backref_pos != NULL) ? "Defined" : "NULL"),
+	  ((pat->operation != NULL) ? "Defined" : "NULL"),
+	  ((pat->comp_pattern != NULL) ? "Defined" : "NULL"));
+  fprintf(stderr, "striped_pattern[0] %s\nstriped_pattern[1] %s\n\n",
+	  pat->striped_pattern[0], pat->striped_pattern[1]);
+  pthread_mutex_unlock(&fre_stderr_mutex);
   return;
 }

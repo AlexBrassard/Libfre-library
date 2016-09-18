@@ -15,7 +15,9 @@
 #include "fre_internal.h"
 
 
-pthread_mutex_t fre_stderr_mutex;
+pthread_mutex_t fre_stderr_mutex;  /* For when error/debug messages has multiple function calls. */
+
+
 
 int __attribute__ ((constructor)) intern__fre__lib_init(void)
 {

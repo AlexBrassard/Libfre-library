@@ -16,6 +16,10 @@
 # include <regex.h>
 # include <pthread.h>
 
+/* To serialize messages containing multiple function calls. */
+extern pthread_mutex_t fre_stderr_mutex; /* Defined and initialized in "fre_internal_init.c" */
+
+
 /** Data structures **/
 
 /* Sub-match(es) begining/ending of match offsets structure. */
@@ -124,23 +128,26 @@ static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0-9]"; /* Used mostly to repl
 
 /* Simple error message. */
 #define intern__fre__errmesg(string) do {		\
+    pthread_mutex_lock(&fre_stderr_mutex);		\
     if (errno) {					\
       perror(string);					\
     } else {						\
       fprintf(stderr, "%s ", string);			\
     }							\
     fprintf(stderr, "@ line: %d\n\n", __LINE__);	\
+    pthread_mutex_unlock(&fre_stderr_mutex);		\
   } while (0);
 
 
-/** Internal function prototypes **/
+/*** Internal function prototypes ***/
 
-/* Library's init/finit. */
+/** Library's init/finit. **/
 int          intern__fre__lib_init(void);                          /* Initialize the library's globals. */
 void         intern__fre__lib_finit(void);                         /* Free the library's globals memory. */
 
 
-/* Memory allocation/deallocation routines. */
+/** Memory allocation/deallocation routines. **/
+
 fre_backref* intern__fre__init_bref_arr(void);                     /* Allocate memory to a fre_backref* object. */
 void         intern__fre__free_bref_arr(fre_backref *to_free);     /* Free resources of a fre_backref *. */
 /* There's no _free_smatch(), _free_pmatch_node handles this. */
@@ -150,5 +157,13 @@ void         intern__fre__free_pmatch_node(fre_pmatch *node);      /* Free resou
 void         intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the whole headnode pmatch linked-list. */
 fre_pattern* intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
 void         intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
+
+
+/** Regex Parser utility routines. **/
+
+/* Skip a commentary when the '/x' modifier is activated. */
+int intern__fre__skip_comments(char *pattern,
+			       size_t *pattern_len,
+			       size_t *token_ind);
 
 #endif /* FRE_INTERNAL_HEADER */

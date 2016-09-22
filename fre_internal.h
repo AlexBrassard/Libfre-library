@@ -22,6 +22,7 @@ extern pthread_mutex_t fre_stderr_mutex; /* Defined and initialized in "fre_inte
 
 /** Data structures **/
 
+
 /* Sub-match(es) begining/ending of match offsets structure. */
 typedef struct fre_sm{
   int                   bo;               /* Offset of the begining of sub-match. */
@@ -31,14 +32,29 @@ typedef struct fre_sm{
 
 /* Per-thread global sub-match table kept between invocations of fre_bind(). */
 typedef struct fre_pmatch_tab {
-  bool                  fre_mod_global; /* True when /g is activated, pmatch_table will contain extra nodes. */
+  bool                  fre_saved_head;   /* True when this linked-list's headnode is saved in the global table. */
+  bool                  fre_mod_global;   /* True when /g is activated, pmatch_table will contain extra nodes. */
   /* Determined by the values in regmatch_t[]. */
-  fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
-  fre_smatch            **sub_match;      /* Array of sub-match offsets. */
   struct fre_pmatch_tab *next_match;      /* Pointer to the node containing positions of the next match. */
   struct fre_pmatch_tab *headnode;        /* Pointer to the pmatch_table's head_node, for easy access. */
+  fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
+  fre_smatch            **sub_match;      /* Array of sub-match offsets. */
   
 } fre_pmatch;
+
+/* 
+ * Global table containing pointers to headnodes of all created 
+ * pmatch-tables to allow _lib_finit to free them.
+ */
+typedef struct fre_head_tab {
+  size_t                numof_tables;     /*obsolete Number of nodes in the array. */
+  size_t                sizeof_table;     /* The size of the array. */
+  size_t                head_list_tos;    /* The headnode list's first available element. */
+  pthread_mutex_t       *table_lock;      /* To serialize access to the table. */
+  fre_pmatch            **head_list;      /* Array of pointers to pmatch_table headnodes. */
+
+
+} fre_headnodes;
 
 
 /* To keep track of where in each patterns are the back-references. */
@@ -95,7 +111,6 @@ typedef struct fpattern {
 
   /* Patterns */
   regex_t  *comp_pattern;          /* The compiled regex pattern. */
-  //  char     *original_pattern;      /* The original, unmodified pattern. */  
   char     **striped_pattern;      /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
 
 } fre_pattern;
@@ -108,26 +123,27 @@ typedef struct fpattern {
 # define FRE_EXPECTED_M_OP_DELIMITER   2       /* Number of expected delimiters for a match op pattern. */
 # define FRE_EXPECTED_ST_OP_DELIMITER  3       /* Number of expected delimiters for subs. and trans. op patterns. */
 # define FRE_MAX_SUB_MATCHES           100     /* Maximum number of submatches. */
-# define FRE_PMATCH_TABLE_SIZE         256     /* Arbitrary. */
+# define FRE_HEADNODE_TABLE_SIZE       64      /* Arbitrary. Default number of pmatch_table in headnode_table. */
 
-/* 
- * Setting FRE_ARG_STRING_MAX_LENGHT to a smaller value 
- * than INT_MAX might result in overflow. 
- * Setting FRE_ARG_STRING_MAX_LENGHT to a value bigger than
- * INT_MAX might result in lost of information.
- */
+/* Must be INT_MAX to safely fetch sub-match(es) position(s). */
 # define FRE_ARG_STRING_MAX_LENGHT     INT_MAX /* Maximum lenght of fre_bind()'s string argument, '\0' included. */
 
+/* 
+ * Successful is set to 1, it makes for prettier 'if' statements. 
+ * Ex: if (fre_bind(pattern,string)) { puts("Matched!"); }
+ */
 # define FRE_OP_SUCCESSFUL             1       /* Indicate a successful operation. */
 # define FRE_OP_UNSUCCESSFUL           0       /* Indicate an unsuccessful operation. */
 # define FRE_ERROR                    -1       /* Indicate an error. */
 
+static const char FRE_PAIRED_O_DELIMITERS[]   = "<({[";   /* Opening paired-type delimiters. */
+static const char FRE_PAIRED_C_DELIMITERS[]   = ">)}]";   /* Closing paired-type delimiters. */
 static const char FRE_POSIX_DIGIT_RANGE[]     = "[0-9]";  /* Used mostly to replace '\d' escape sequence. */
 static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0-9]"; /* Used mostly to replace '\D' escape sequence. */
-
+extern fre_headnodes *fre_headnode_table;                 /* Global table of linked-lists headnodes, use with care. */
 
 /* Simple error message. */
-#define intern__fre__errmesg(string) do {		\
+# define intern__fre__errmesg(string) do {		\
     pthread_mutex_lock(&fre_stderr_mutex);		\
     if (errno) {					\
       perror(string);					\
@@ -139,6 +155,7 @@ static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0-9]"; /* Used mostly to repl
   } while (0);
 
 
+
 /*** Internal function prototypes ***/
 
 /** Library's init/finit. **/
@@ -148,22 +165,35 @@ void         intern__fre__lib_finit(void);                         /* Free the l
 
 /** Memory allocation/deallocation routines. **/
 
-fre_backref* intern__fre__init_bref_arr(void);                     /* Allocate memory to a fre_backref* object. */
-void         intern__fre__free_bref_arr(fre_backref *to_free);     /* Free resources of a fre_backref *. */
+fre_backref*   intern__fre__init_bref_arr(void);                     /* Allocate memory to a fre_backref* object. */
+void           intern__fre__free_bref_arr(fre_backref *to_free);     /* Free resources of a fre_backref *. */
 /* There's no _free_smatch(), _free_pmatch_node handles this. */
-fre_smatch*  intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
-fre_pmatch*  intern__fre__init_pmatch_node(fre_pmatch *headnode);  /* Allocate memory to a single node of the pmatch_table. */
-void         intern__fre__free_pmatch_node(fre_pmatch *node);      /* Free resources of a single node of the pmatch_table. */
-void         intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the whole headnode pmatch linked-list. */
-fre_pattern* intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
-void         intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
-
+fre_smatch*    intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
+fre_pmatch*    intern__fre__init_pmatch_node(void);                  /* Allocate memory to a single node of the pmatch_table. */
+void           intern__fre__free_pmatch_node(fre_pmatch *node);      /* Free resources of a single node of the pmatch_table. */
+fre_pmatch*    intern__fre__init_ptable(size_t numof_nodes);         /* Initialize a complete pmatch linked-list. */
+void           intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the whole headnode pmatch linked-list. */
+fre_pattern*   intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
+void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
+fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */
+void           intern__fre__free_head_table(void);/*fre_headnodes *table);    Release resources of the global headnode_table. */
+int            intern__fre__push_head(fre_pmatch* head);             /* Add the given headnode to the global headnode_table. */
+//fre_pmatch*    intern__fre__fetch_head(void);                        /* Get a headnode from the global headnode_table. */
+void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
+fre_pmatch*    intern__fre__pmatch_location(void);                   /* To access a thread's pmatch-table. */
+void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
 
 /** Regex Parser utility routines. **/
 
-/* Skip a commentary when the '/x' modifier is activated. */
-int intern__fre__skip_comments(char *pattern,
+fre_pattern* intern__fre__plp_parser(char *pattern);               /* The Perl-like Pattern Parser. */
+
+int intern__fre__skip_comments(char *pattern,                      /* Skip a commentary when the '/x' modifier is activated. */
 			       size_t *pattern_len,
 			       size_t *token_ind);
+
+
+/* Thread specific pmatch-table. */
+#define fre_pmatch_table (intern__fre__pmatch_location())
+
 
 #endif /* FRE_INTERNAL_HEADER */

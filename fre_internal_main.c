@@ -19,7 +19,7 @@
  * conformant pattern and output it in the form of a fre_pattern object, 
  * containing all informations relative to the pattern given by the caller.
  *
- * The public interface's fre_bind() is reponsible of untaining 
+ * The public interface's fre_bind() is reponsible of untainting 
  * the pattern before calling on _plp_parser() with it.
  * 
  */
@@ -98,7 +98,10 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     intern__fre__errmesg("Syntax error: Missing delimiter in pattern");
     goto errjmp;
   }
-
+  if (intern__fre__strip_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
+    intern__fre__errmesg("Intern__fre__strip_pattern");
+    goto errjmp;
+  }
   /* 
    * Strip a pattern from its Perl-like element,
    * split the "matching pattern" and "substitute" pattern (if there's one).

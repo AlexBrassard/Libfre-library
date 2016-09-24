@@ -68,8 +68,8 @@ typedef struct fre_brefs {
 					  * [0] is relative to the begining of stripped_pattern[1],
 					  * [1+] are relative to the begining of their previous element.
 					  */
-  int                   in_pattern_c;    /* First free empty element of in_pattern. */
-  int                   in_substitute_c; /* First free empty element of in_substitute. */
+  size_t                   in_pattern_c;    /* First free empty element of in_pattern. */
+  size_t                   in_substitute_c; /* First free empty element of in_substitute. */
 
 } fre_backref;
 
@@ -178,15 +178,23 @@ void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release 
 fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */
 void           intern__fre__free_head_table(void);/*fre_headnodes *table);    Release resources of the global headnode_table. */
 int            intern__fre__push_head(fre_pmatch* head);             /* Add the given headnode to the global headnode_table. */
-//fre_pmatch*    intern__fre__fetch_head(void);                        /* Get a headnode from the global headnode_table. */
+/*fre_pmatch*    intern__fre__fetch_head(void);                         Get a headnode from the global headnode_table. */
 void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
 fre_pmatch*    intern__fre__pmatch_location(void);                   /* To access a thread's pmatch-table. */
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
 
+
+/* TEMPORARY ONLY */
+void print_pattern_hook(fre_pattern* pat);
+/**/
+
 /** Regex Parser utility routines. **/
 
 fre_pattern* intern__fre__plp_parser(char *pattern);               /* The Perl-like Pattern Parser. */
-
+int          intern__fre__strip_pattern(char * pattern,            /* Strip a pattern from its Perl-like elements. */
+					fre_pattern *freg_object,
+					size_t token_ind);
+					
 int intern__fre__skip_comments(char *pattern,                      /* Skip a commentary when the '/x' modifier is activated. */
 			       size_t *pattern_len,
 			       size_t *token_ind);

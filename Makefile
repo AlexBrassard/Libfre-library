@@ -8,7 +8,7 @@
 
 # GCC compile flags
 GNUCC = gcc
-GNUCFLAGS =  -g -pg -std=gnu99 -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-parameter -Wall -Wextra -Wpedantic \
+GNUCFLAGS =  -g3 -pg -std=gnu99 -Wno-unused-but-set-variable -Wno-unused-variable -Wno-unused-parameter -Wall -Wextra -Wpedantic \
             -Wpointer-arith -Wstrict-prototypes 
 GNULDFLAGS = -lpthread
 

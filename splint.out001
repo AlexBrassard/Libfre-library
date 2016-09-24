@@ -1,0 +1,8 @@
+Splint 3.1.2 --- 20 Feb 2009
+
+Spec file not found: 2.lcl
+Cannot open file: 2.c
+/usr/include/sched.h:35:22: Parse Error:
+    Suspect missing struct or union keyword: __pid_t :
+    int. (For help on parse errors, see splint -help parseerrors.)
+*** Cannot continue.

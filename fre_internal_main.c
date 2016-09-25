@@ -98,15 +98,21 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     intern__fre__errmesg("Syntax error: Missing delimiter in pattern");
     goto errjmp;
   }
-  if (intern__fre__strip_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
-    intern__fre__errmesg("Intern__fre__strip_pattern");
-    goto errjmp;
-  }
+
   /* 
    * Strip a pattern from its Perl-like element,
    * split the "matching pattern" and "substitute" pattern (if there's one).
    */
+  if (intern__fre__strip_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
+    intern__fre__errmesg("Intern__fre__strip_pattern");
+    goto errjmp;
+  }
 
+  /* Convert a stripped Perl-like pattern into a POSIX ERE conformant pattern. */
+  if (intern__fre__perl_to_posix(freg_object) != FRE_OP_SUCCESSFUL){
+    intern__fre__errmesg("Intern__fre__perl_to_posix");
+    goto errjmp;
+  }
   
   return freg_object; /* Success! */
   

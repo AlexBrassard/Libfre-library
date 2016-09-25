@@ -194,6 +194,11 @@ fre_pattern* intern__fre__plp_parser(char *pattern);               /* The Perl-l
 int          intern__fre__strip_pattern(char * pattern,            /* Strip a pattern from its Perl-like elements. */
 					fre_pattern *freg_object,
 					size_t token_ind);
+int          intern__fre__perl_to_posix(fre_pattern *freg_object); /* 
+								    * Convert a stripped Perl-like pattern into a
+								    * POSIX ERE conformant pattern. 
+								    */
+
 					
 int intern__fre__skip_comments(char *pattern,                      /* Skip a commentary when the '/x' modifier is activated. */
 			       size_t *pattern_len,

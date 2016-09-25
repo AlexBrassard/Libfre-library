@@ -670,6 +670,9 @@ int intern__fre__strip_pattern(char *pattern,
       else {
 	/* Found a new pair of delimiters. */
 	if (FRE_TOKEN == freg_object->delimiter){
+	  /* Push it to the pattern's stack if the pair counters > 0. */
+	  if (delimiter_pairs_c > 0)
+	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	  ++delimiter_pairs_c;
 	  ++token_ind;                  /* Get next token. */
 	  continue;
@@ -677,13 +680,16 @@ int intern__fre__strip_pattern(char *pattern,
 	/* Found the end of a pair of delimiters. */
 	else if (FRE_TOKEN == freg_object->c_delimiter){
 	  --delimiter_pairs_c;
+	  /* Push it to the pattern's stack if once decremented the pair counter is still > 0. */
+	  if (delimiter_pairs_c > 0)
+	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	  ++token_ind;                  /* Get next token. */
 	  continue;
 	}
 	/* 
 	   Fetch the substitute pattern's sub-refs positions, if any, right now. 
 	*/
-	if ((spa_ind == 1) && (FRE_TOKEN == '$')) {
+	if ((spa_ind == 1) && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')) {
 	  /* Make sure the next token is a digit. 
 	   *
 	   * Note that backrefs begining with a backslash are handled
@@ -699,6 +705,7 @@ int intern__fre__strip_pattern(char *pattern,
 	    continue;
 	  }
 	  else {
+	    /* may not have to conver the string number into an integer, at least not here. */
 	    FRE_HANDLE_BREF(token_ind, spa_ind, freg_object);
 	    i = 0;
 	    bref_num = 0;
@@ -707,7 +714,7 @@ int intern__fre__strip_pattern(char *pattern,
 	      bref_num_string[i++] = pattern[token_ind + 1];
 	      ++token_ind;
 	    }
-	    token_ind++;
+	    ++token_ind;
 	    bref_num = atoi(bref_num_string);
 
 	    continue; 
@@ -798,6 +805,84 @@ int intern__fre__strip_pattern(char *pattern,
   return FRE_OP_SUCCESSFUL;
   
 } /* intern__fre__strip_pattern() */
+
+
+/*
+ * This MACRO is used to verify each escape sequence found in the user's given pattern,
+ * and replace any sequences not supported by the POSIX standard. 
+ * Takes the parsed pattern, the token index of the backslash leading the escape sequence,
+ * the new pattern made by _perl_to_posix, the new pattern's top of stack, the new pattern's
+ * current lenght and the fre_pattern object used throughout the library.
+ */
+#define FRE_CERTIFY_ESC_SEQ(pattern, token_ind, new_pat, new_pat_tos, new_pat_len, freg_object) do { \
+    size_t i = 0;							\
+    switch(pattern[*token_ind + 1]){					\
+    case 'd':								\
+      if ((*new_pat_len += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
+	errno = 0; intern__fre__errmesg("Could not convert the Perl-like digit range '\\d'"); \
+	return FRE_ERROR;						\
+      }									\
+      while (FRE_POSIX_DIGIT_RANGE[i] != '\0'){				\
+	new_pat[(*new_pat_tos)++] = FRE_POSIX_DIGIT_RANGE[i++];		\
+      }									\
+      /* Adjust the token index. */					\
+      (*token_ind)++;							\
+      break;								\
+    case 'D':								\
+      if ((*new_pat_len += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
+	errno = 0; intern__fre__errmesg("Could not convert the Perl-like not digit range '\\D'"); \
+	return FRE_ERROR;						\
+      }									\
+      while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') {			\
+	new_pat[(*new_pat_tos)++] = FRE_POSIX_NON_DIGIT_RANGE[i++];	\
+      }									\
+      /* Adjust the token index. */					\
+      (*token_ind)++;							\
+      break;								\
+      /* More test will go here. */					\
+    default:								\
+      /* Verify if sequence is a backref sequence. */			\
+      if (isdigit(pattern[*token_ind + 1]))				\
+	FRE_HANDLE_BREF(*token_ind, 0, freg_object);			\
+      break;								\
+    }									\
+  }while (0);
+
+/* 
+ * Convert any non-POSIX, Perl-like elements into
+ * POSIX supported constructs.
+ */
+int intern__fre__perl_to_posix(fre_pattern *freg_object){
+  size_t token_ind = 0;
+  size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */
+  size_t new_pattern_len = strnlen(freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT);
+  char   new_pattern[FRE_MAX_PATTERN_LENGHT]; /* The array used to build the new pattern. */
+
+#undef FRE_TOKEN
+#define FRE_TOKEN freg_object->striped_pattern[0][token_ind]
+
+  while(1) {
+    if (FRE_TOKEN == '\0'){
+      /* Terminate the new pattern. */
+      FRE_PUSH('\0', new_pattern, &new_pattern_tos);
+      break;
+    }
+    else if (FRE_TOKEN == '\\'){
+      FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[0], &token_ind, new_pattern,
+			  &new_pattern_tos, &new_pattern_len, freg_object);
+    }
+
+    /* Valid token. */
+    else {
+      FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
+    }
+    /* Get next token. */
+    ++token_ind;
+  } /* while(1) */
+  memset(freg_object->striped_pattern[0], 0, FRE_MAX_PATTERN_LENGHT);
+  memcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT - 1);
+  return FRE_OP_SUCCESSFUL;
+} /* intern__fre__perl_to_posix() */
 
 
 

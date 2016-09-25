@@ -37,7 +37,7 @@ int main(void)
    * in _strip_pattern() valgrind complained about.
    */
   memset(pat_to_parse, 0, 256);
-  strcpy(pat_to_parse, "s<(bob)><lol$1a$1>gi");
+  strcpy(pat_to_parse, "m<^<\\d{3}>>gs");
   
   if ((freg_object = intern__fre__plp_parser(pat_to_parse)) == NULL) {
     intern__fre__errmesg("Intern__fre__plp_parser");

@@ -1,3 +1,4 @@
+
 /*
  *
  *
@@ -127,7 +128,15 @@ fre_backref* intern__fre__init_bref_arr(void)
     intern__fre__errmesg("Calloc");
     goto errjump;
   }
+  if ((to_init->p_sm_number = calloc(FRE_MAX_SUB_MATCHES, sizeof(long))) == NULL){
+    intern__fre__errmesg("Calloc");
+    goto errjump;
+  }
   if ((to_init->in_substitute = calloc(FRE_MAX_SUB_MATCHES, sizeof(int))) == NULL){
+    intern__fre__errmesg("Calloc");
+    goto errjump;
+  }
+  if ((to_init->s_sm_number = calloc(FRE_MAX_SUB_MATCHES, sizeof(long))) == NULL){
     intern__fre__errmesg("Calloc");
     goto errjump;
   }
@@ -141,9 +150,17 @@ fre_backref* intern__fre__init_bref_arr(void)
       free(to_init->in_pattern);
       to_init->in_pattern = NULL;
     }
+    if (to_init->p_sm_number != NULL){
+      free(to_init->p_sm_number);
+      to_init->p_sm_number = NULL;
+    }
     if (to_init->in_substitute != NULL){
       free(to_init->in_substitute);
       to_init->in_substitute = NULL;
+    }
+    if (to_init->s_sm_number != NULL){
+      free(to_init->s_sm_number);
+      to_init->s_sm_number = NULL;
     }
     free(to_init);
     to_init = NULL;
@@ -166,9 +183,17 @@ void intern__fre__free_bref_arr(fre_backref *to_free)
     free(to_free->in_pattern);
     to_free->in_pattern = NULL;
   }
+  if (to_free->p_sm_number != NULL){
+    free(to_free->p_sm_number);
+    to_free->p_sm_number = NULL;
+  }
   if (to_free->in_substitute != NULL){
     free(to_free->in_substitute);
     to_free->in_substitute = NULL;
+  }
+  if (to_free->s_sm_number != NULL){
+    free(to_free->s_sm_number);
+    to_free->s_sm_number = NULL;
   }
   free(to_free);
   to_free = NULL;
@@ -517,65 +542,67 @@ int intern__fre__skip_comments(char *pattern,
   } while (0);
 
 
-/* 
- * Gather all pattern modifiers and raise their
- * respective flags in the fre_pattern object. 
- */
-#define FRE_FETCH_MODIFIERS(pattern, freg_object, token_ind) do {	\
-    while(pattern[*token_ind] != 0){					\
-      switch(pattern[*token_ind]){					\
-      case 'g':								\
-	freg_object->fre_mod_global = true;  break;			\
-      case 'i':								\
-	freg_object->fre_mod_icase = true;   break;			\
-      case 's':								\
-	freg_object->fre_mod_newline = true; break;			\
-      case 'm':								\
-	freg_object->fre_mod_boleol = true;  break;			\
-      case 'x':								\
-	freg_object->fre_mod_ext = true;     break;			\
-      default:								\
-	errno = 0; intern__fre__errmesg("Unknown modifier in pattern");	\
-	return FRE_ERROR;						\
-      }									\
-      (*token_ind)++;							\
-    }									\
-  } while (0);								\
 
+int FRE_FETCH_MODIFIERS(char *pattern,
+			fre_pattern *freg_object,
+			size_t *token_ind)
+{
+  while (pattern[*token_ind] != '\0') {
+    switch (pattern[*token_ind]) {
+    case 'g':
+      freg_object->fre_mod_global = true;
+      break;
+    case 'i':
+      freg_object->fre_mod_icase = true;
+      break;
+    case 's':
+      freg_object->fre_mod_newline = true;
+      break;
+    case 'm':
+      freg_object->fre_mod_boleol = true;
+      break;
+    case 'x':
+      freg_object->fre_mod_ext = true;
+      break;
+    default:
+      errno = 0;
+      intern__fre__errmesg("Unknown modifier in pattern.");
+      return FRE_ERROR;
+    }
+    (*token_ind)++;
+  }
+  return FRE_OP_SUCCESSFUL;
+}
 
-/* 
- * Register the position within a matching or substitute pattern of 
- * the backref begining at token_ind.
- * The first backref (->in_*[0]) position is from the begining of pattern
- * every following backref's position is from the previous backref index (->in_*[i - 1]).
- */
-#define FRE_HANDLE_BREF(token_ind, fre_is_sub, freg_object) do {	\
-    if (fre_is_sub == 0){							\
-      if (freg_object->backref_pos->in_pattern_c == 0){			\
-	freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c++] = token_ind; \
-      } else if (freg_object->backref_pos->in_pattern_c > 0) {		\
-	freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = \
-	  (token_ind - freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c - 1]); \
-	freg_object->backref_pos->in_pattern_c++;			\
-      } else {								\
-	errno = 0; intern__fre__errmesg("FRE_HANDLE_BREF: Invalid back-reference position"); \
-	return FRE_ERROR;						\
-      }									\
-    } else {								\
-      if (freg_object->backref_pos->in_substitute_c == 0){		\
-	freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c++] = token_ind; \
-      } else if (freg_object->backref_pos->in_substitute_c > 0) {	\
-	freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = \
-	  (token_ind - freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c - 1]); \
-	freg_object->backref_pos->in_substitute_c++;			\
-      } else {								\
-	errno = 0; intern__fre__errmesg("FRE_HANDLE_BREF: Invalid back-reference position"); \
-	return FRE_ERROR;						\
-      }									\
-    }									\
-  } while(0);
-
-
+int FRE_HANDLE_BREF(char *pattern,
+		    size_t *token_ind,
+		    size_t sub_match_ind,
+		    int fre_is_sub,
+		    fre_pattern *freg_object)
+{
+  char refnum_string[FRE_MAX_PATTERN_LENGHT];
+  long refnum = 0;
+  size_t i = 0;
+  if (!fre_is_sub) {
+    freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = sub_match_ind;
+  }
+  else {
+    freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = sub_match_ind;
+  }
+  memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);
+  ++(*token_ind);
+  do {
+    refnum_string[i++] = pattern[(*token_ind)++];
+  } while (isdigit(*token_ind));
+  refnum = atol(refnum_string);
+  if (!fre_is_sub){
+    freg_object->backref_pos->p_sm_number[freg_object->backref_pos->in_pattern_c++] = refnum;
+  }
+  else{
+    freg_object->backref_pos->s_sm_number[freg_object->backref_pos->in_substitute_c++] = refnum;
+  }
+  return FRE_OP_SUCCESSFUL;
+}
 
 /* 
  * Strip a pattern from all its Perl-like elements.
@@ -586,8 +613,8 @@ int intern__fre__strip_pattern(char *pattern,
 			       fre_pattern *freg_object,
 			       size_t token_ind)
 {
-  int    bref_num = 0;                    
-  char   bref_num_string[FRE_MAX_SUB_MATCHES]; /* Used by atoi() to convert encountered bref numbers into integers. */
+int    bref_num = 0;                    
+ char   bref_num_string[FRE_MAX_SUB_MATCHES]; /* Used by atoi() to convert encountered bref numbers into integers. */
   size_t i = 0;
   size_t spa_tos = 0;                          /* ->striped_pattern[0|1]'s tos values. */
   size_t spa_ind = 0;                          /* 0: matching pattern ind; 1: substitute pattern ind. */
@@ -596,6 +623,7 @@ int intern__fre__strip_pattern(char *pattern,
 						* We've been given the index of the first token 
 						* following the first delimiter. 
 						*/
+  size_t numof_seen_tokens = 0;                /* To help registering positions of back-references. */
   size_t pattern_len = strnlen(pattern,FRE_MAX_PATTERN_LENGHT); /* The pattern's lenght. */
   
 #define FRE_TOKEN pattern[token_ind]
@@ -615,7 +643,7 @@ int intern__fre__strip_pattern(char *pattern,
 	}
 	else { /* Syntax error. */
 	  errno = 0;
-	  intern__fre__errmesg("Encountered end of string before end of pattern");
+ 	  intern__fre__errmesg("Encountered end of string before end of pattern");
 	  return FRE_ERROR;
 	}
       }
@@ -624,7 +652,13 @@ int intern__fre__strip_pattern(char *pattern,
 	intern__fre__errmesg("Encountered end of string before end of pattern");
 	return FRE_ERROR;
       }
-    }      
+    }
+    /* 
+     * Increment numof_seen_tokens here, and
+     * decrement it when we find a backref.
+     */
+    ++numof_seen_tokens;
+    
     /* Handle patterns with paired-type delimiters. */
     if (freg_object->fre_paired_delimiters == true){
       /*
@@ -638,32 +672,62 @@ int intern__fre__strip_pattern(char *pattern,
 	  /* NULL terminate the stripped off pattern. */
 	  FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	  break;
 	}
 	/* ->fre_op_flag is SUBSTITUTE or TRANSLITERATE */
 	else {
-	  if(FRE_TOKEN != freg_object->delimiter){
+	  /*
+	   * If token is the opening delimiter
+	   * If spa_ind is 0 continue,
+	   * Else if spa_ind is 1
+	     reset spa_tos,
+	     increment delimiter_pairs_c, reset numof_seen_tokens,
+	     increment token_ind, 
+	     continue.
+	   * Else it must be a modifier. 
+	   */
+	  if(FRE_TOKEN == freg_object->delimiter){
+	    if (spa_ind == 0) { continue; }
+	    else if (spa_ind == 1) {
+	      spa_tos = 0;
+	      numof_seen_tokens = 0;
+	      ++delimiter_pairs_c;
+	      ++token_ind;
+	      continue;
+	    }
+	    else {
+	      FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	      break;
+	    }
+	  }
+	  else if (FRE_TOKEN == freg_object->c_delimiter){
+	    FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
+	    ++spa_ind;
+	    continue;
+	  }
+	    
+
+	  /*	
 	    if (spa_ind < 1){
-	      /* Syntax error:
-	       * In a pattern like        s<bob><lol> 
-	       * we should be exactly there     ^
-	       */
+	  
 	      errno = 0;
 	      intern__fre__errmesg("Missing delimiter in substitute pattern");
 	      return FRE_ERROR;
 	    }
 	    FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
 	    break;
-	  }
+	    }*/
 	  /*
 	   * Terminate the string and 
 	   * reset the striped_pattern index to reuse it. 
-	   */
+	   
 	  FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
 	  ++spa_ind;
 	  spa_tos = 0;
 	  ++token_ind;
 	  ++delimiter_pairs_c;
-	  continue;                     /* Get next token. */
+	  numof_seen_tokens = 0;
+	  continue;                      Get next token. */
 	}
       }
       /* delimiter_pairs > 0 */
@@ -681,8 +745,12 @@ int intern__fre__strip_pattern(char *pattern,
 	else if (FRE_TOKEN == freg_object->c_delimiter){
 	  --delimiter_pairs_c;
 	  /* Push it to the pattern's stack if once decremented the pair counter is still > 0. */
-	  if (delimiter_pairs_c > 0)
+	  if (delimiter_pairs_c > 0){
 	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
+	  }
+	  else{
+	    spa_ind++;
+	  }
 	  ++token_ind;                  /* Get next token. */
 	  continue;
 	}
@@ -705,9 +773,14 @@ int intern__fre__strip_pattern(char *pattern,
 	    continue;
 	  }
 	  else {
-	    /* may not have to conver the string number into an integer, at least not here. */
-	    FRE_HANDLE_BREF(token_ind, spa_ind, freg_object);
-	    i = 0;
+	    --numof_seen_tokens;
+	    FRE_HANDLE_BREF(pattern,
+			    &token_ind,
+			    (freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_seen_tokens,
+			    1, freg_object);
+	    if (errno != 0) return FRE_ERROR;
+	    numof_seen_tokens = 0;
+	    /*	    i = 0;
 	    bref_num = 0;
 	    memset(bref_num_string, 0, FRE_MAX_SUB_MATCHES);
 	    while (isdigit(pattern[token_ind + 1])){
@@ -715,7 +788,7 @@ int intern__fre__strip_pattern(char *pattern,
 	      ++token_ind;
 	    }
 	    ++token_ind;
-	    bref_num = atoi(bref_num_string);
+	    bref_num = atoi(bref_num_string);*/
 
 	    continue; 
 	  }
@@ -731,9 +804,10 @@ int intern__fre__strip_pattern(char *pattern,
 	/* Terminate pattern and adjust spa indexes to build the 2nd pattern, if any. */
 	FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
 	++numof_seen_delimiter;
-	spa_ind = 1;
+	++spa_ind;
 	spa_tos = 0;
 	++token_ind; /* Get next token. */
+	numof_seen_tokens = 0;
 	continue;
       }
       /* Handle matching operation patterns. */
@@ -759,25 +833,21 @@ int intern__fre__strip_pattern(char *pattern,
 	   * Note that backref begining with a backslash are handled
 	   * by _certify_esc_seq().
 	   */
-	  if (spa_ind == 1 && FRE_TOKEN == '$'){
-	    if (!isdigit(pattern[token_ind + 1])){
-	      /* Let '$' be an anchor, push it on the pattern stack. */
-	      FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	      ++token_ind;
+	  if (spa_ind == 1 && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')){
+	    if (isdigit(pattern[token_ind + 1])){
+	      --numof_seen_tokens;
+	      FRE_HANDLE_BREF(pattern,
+			      &token_ind,
+			      (freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_seen_tokens,
+			      1, freg_object);
+	      if (errno != 0) return FRE_ERROR;
+	      numof_seen_tokens = 0;
 	      continue;
 	    }
 	    else {
-	      FRE_HANDLE_BREF(token_ind, spa_ind, freg_object);
-	      i = 0;
-	      bref_num = 0;
-	      memset(bref_num_string, 0, FRE_MAX_SUB_MATCHES);
-	      while (isdigit(pattern[token_ind + 1])) {
-		bref_num_string[i] = pattern[token_ind + 1];
-		++token_ind;
-	      }
-	      bref_num = atoi(bref_num_string);
-	      token_ind++;
-	      /* Handle backref number bref_num here. */
+	      /* Let '$' be an anchor, push it on the pattern stack. */
+	      FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
+	      ++token_ind;
 	      continue;
 	    }
 	  }
@@ -823,10 +893,10 @@ int intern__fre__strip_pattern(char *pattern,
 	return FRE_ERROR;						\
       }									\
       while (FRE_POSIX_DIGIT_RANGE[i] != '\0'){				\
-	new_pat[(*new_pat_tos)++] = FRE_POSIX_DIGIT_RANGE[i++];		\
+	FRE_PUSH(FRE_POSIX_DIGIT_RANGE[i++], new_pat, new_pat_tos);	\
       }									\
       /* Adjust the token index. */					\
-      (*token_ind)++;							\
+      (*token_ind) += 2;						\
       break;								\
     case 'D':								\
       if ((*new_pat_len += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
@@ -834,16 +904,17 @@ int intern__fre__strip_pattern(char *pattern,
 	return FRE_ERROR;						\
       }									\
       while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') {			\
-	new_pat[(*new_pat_tos)++] = FRE_POSIX_NON_DIGIT_RANGE[i++];	\
+	FRE_PUSH(FRE_POSIX_NON_DIGIT_RANGE[i++], new_pat, new_pat_tos)	\
       }									\
       /* Adjust the token index. */					\
-      (*token_ind)++;							\
+      (*token_ind) += 2;						\
       break;								\
       /* More test will go here. */					\
     default:								\
-      /* Verify if sequence is a backref sequence. */			\
-      if (isdigit(pattern[*token_ind + 1]))				\
-	FRE_HANDLE_BREF(*token_ind, 0, freg_object);			\
+      /* Assume a supported sequence, push the tokens on the pattern stack. */ \
+      FRE_PUSH(pattern[(*token_ind)++], new_pat, new_pat_tos);		\
+      FRE_PUSH(pattern[(*token_ind)++], new_pat, new_pat_tos);		\
+      /*(*token_ind) += 2;*/						\
       break;								\
     }									\
   }while (0);
@@ -853,6 +924,8 @@ int intern__fre__strip_pattern(char *pattern,
  * POSIX supported constructs.
  */
 int intern__fre__perl_to_posix(fre_pattern *freg_object){
+  bool   call_handle_bref = false;         /* True when _certify_esq_seq found digits after a backslash. */
+  size_t numof_seen_tokens = 0;            /* Used to help register back-reference positions. */
   size_t token_ind = 0;
   size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */
   size_t new_pattern_len = strnlen(freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT);
@@ -867,9 +940,34 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
       FRE_PUSH('\0', new_pattern, &new_pattern_tos);
       break;
     }
-    else if (FRE_TOKEN == '\\'){
-      FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[0], &token_ind, new_pattern,
-			  &new_pattern_tos, &new_pattern_len, freg_object);
+    /*
+     * Increment numof_seen_tokens now, decrement it
+     * only when we're sure we found a backref. 
+     */
+    ++numof_seen_tokens;
+  
+    if (FRE_TOKEN == '\\'
+	     || FRE_TOKEN == '$'){
+      /* Must be a back-reference. */
+      if (isdigit(freg_object->striped_pattern[0][token_ind + 1])){
+	--numof_seen_tokens;
+	FRE_HANDLE_BREF(freg_object->striped_pattern[0],
+			&token_ind,
+			(freg_object->backref_pos->in_pattern_c == 0) ? new_pattern_tos : numof_seen_tokens,
+			0, freg_object);
+      	if (errno != 0) return FRE_ERROR;
+	numof_seen_tokens = 0;
+	continue;
+      }
+      /* Must be an escape sequence. */
+      else if (FRE_TOKEN == '\\'){
+	FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[0], &token_ind, new_pattern,
+			    &new_pattern_tos, &new_pattern_len, freg_object);
+	continue;
+      }
+      else {
+	FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
+      }
     }
 
     /* Valid token. */
@@ -917,12 +1015,20 @@ void print_pattern_hook(fre_pattern* pat)
 	   (pat->fre_op_flag == SUBSTITUTE) ? "SUBSTITUTE" :
 	   (pat->fre_op_flag == TRANSLITERATE) ? "TRANSLITERATE" : "Error, invalid flag"),
 	  ((pat->fre_op_bref == true) ? "true" : "false"));
-  fprintf(stderr, "backref_pos\t in_pattern: ");
-  for (i = 0; i < pat->backref_pos->in_pattern_c; i++)
+  fprintf(stderr, "backref_pos\t %-17s:", "in_pattern");
+  for (i = 0; i < pat->backref_pos->in_pattern_c; i++){
     fprintf(stderr, "%d ", pat->backref_pos->in_pattern[i]);
-  fprintf(stderr, "\n          \t in_substitute: ");
+  }
+  fprintf(stderr,"\n          \t %-17s:", "sub-match number");
+  for (i = 0; i < pat->backref_pos->in_pattern_c; i++){
+    fprintf(stderr, "%ld ", pat->backref_pos->p_sm_number[i]);
+  }
+  fprintf(stderr, "\n          \t %-17s:", "in_substitute");
   for (i = 0; i < pat->backref_pos->in_substitute_c; i++)
     fprintf(stderr, "%d ", pat->backref_pos->in_substitute[i]);
+  fprintf(stderr, "\n          \t %-17s:", "sub-match number");
+  for (i = 0; i < pat->backref_pos->in_substitute_c; i++)
+    fprintf(stderr, "%ld ", pat->backref_pos->s_sm_number[i]);
   fprintf(stderr,"\noperation %s\ncomp_pattern %s\n",
 	  ((pat->operation != NULL) ? "Defined" : "NULL"),
 	  ((pat->comp_pattern != NULL) ? "Defined" : "NULL"));
@@ -931,3 +1037,42 @@ void print_pattern_hook(fre_pattern* pat)
   pthread_mutex_unlock(&fre_stderr_mutex);
   return;
 }
+
+void print_string_hook(char* s)
+{
+  if (s == NULL)
+    return;
+  else
+    fprintf(stderr, "%s\n", s);
+}
+
+
+
+
+
+
+/* 
+ * Gather all pattern modifiers and raise their
+ * respective flags in the fre_pattern object. 
+ *
+ #define FRE_FETCH_MODIFIERS(pattern, freg_object, token_ind) do {	\
+ while(pattern[*token_ind] != 0){					\
+ switch(pattern[*token_ind]){						\
+ case 'g':								\
+ freg_object->fre_mod_global = true;  break;				\
+ case 'i':								\
+ freg_object->fre_mod_icase = true;   break;				\
+ case 's':								\
+ freg_object->fre_mod_newline = true; break;				\
+ case 'm':								\
+ freg_object->fre_mod_boleol = true;  break;				\
+ case 'x':								\
+ freg_object->fre_mod_ext = true;     break;				\
+ default:								\
+ errno = 0; intern__fre__errmesg("Unknown modifier in pattern");	\
+ return FRE_ERROR;							\
+ }									\
+ (*token_ind)++;							\
+ }									\
+ } while (0);								\
+*/

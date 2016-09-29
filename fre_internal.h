@@ -64,12 +64,18 @@ typedef struct fre_brefs {
 					 * [1+] are relative to the begining of their previous element.
 					 * (3 rel 2, 2 rel 1, 1 rel 0).
 					 */
+  long                  *p_sm_number;    /*
+					  * Used with ->in_pattern.
+					  * in_pattern's sub-match numbers (to catch cases where the first 
+					  * backref would not be the first sub-match.)
+					  */
   int                   *in_substitute;  /*
 					  * [0] is relative to the begining of stripped_pattern[1],
 					  * [1+] are relative to the begining of their previous element.
 					  */
-  size_t                   in_pattern_c;    /* First free empty element of in_pattern. */
-  size_t                   in_substitute_c; /* First free empty element of in_substitute. */
+  long                  *s_sm_number;    /* Used with ->in_substitute. in_substitute's sub-match numbers. */
+  size_t                in_pattern_c;    /* First free empty element of in_pattern. */
+  size_t                in_substitute_c; /* First free empty element of in_substitute. */
 
 } fre_backref;
 
@@ -154,6 +160,58 @@ extern fre_headnodes *fre_headnode_table;                 /* Global table of lin
     pthread_mutex_unlock(&fre_stderr_mutex);		\
   } while (0);
 
+/*
+ * array: Either ->in_pattern or ->in_substitute,
+ * token_ind: the current token index of FRE_HANDLE_BREF's pattern,
+ * pos_ind: The index to use in ->in_*. 
+ */
+#define FRE_REGISTER_BREF_POS(array, s_ind, pos_ind) do {		\
+    if (*pos_ind == 0){							\
+      array[*pos_ind] = *s_ind;						\
+    } else if (*pos_ind > 0) {						\
+      array[*pos_ind] = (*s_ind - array[(*pos_ind) - 1]);		\
+    } else {								\
+      errno = 1; intern__fre__errmesg("FRE_REGISTER_BREF_POS: Invalid back-reference position"); \
+    }									\
+  } while (0);
+
+/*
+ * Register the position within a matching or substitute pattern of                                                                
+ * the backref begining at token_ind.
+ * The first backref (->in_*[0]) position is from the begining of pattern
+ * every following backref's position is from the previous backref index (->in_*[i - 1]).
+ * errno is set to 0 every time the MACRO is ran, then set to an arbitrary value
+ * on error.
+ pattern: the pattern being processed by the caller.
+ token_ind: used to loop over digits in the callers pattern.
+ s_ind: Index of the bref in the pattern being built.
+ fre_is_sub: indicate which of ->in_pattern or ->in_substitute to use.
+
+ */
+/*
+#define FRE_HANDLE_BREF(pattern, t_ind, s_ind, fre_is_sub, freg_object) do{ \
+    char refnum_string[FRE_MAX_PATTERN_LENGHT];				\
+    size_t i = 0;							\
+    long refnum = 0;							\
+    if (!fre_is_sub){							\
+      freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = s_ind; \
+    } else {								\
+      freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = s_ind; \
+    }									\
+    memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);			\
+    ++(*t_ind);							\
+    do {								\
+      refnum_string[i++] = pattern[(*t_ind)++];			\
+    }while (isdigit(*t_ind));					\
+    refnum = atol(refnum_string);					\
+    if (!fre_is_sub){							\
+      freg_object->backref_pos->p_sm_number[freg_object->backref_pos->in_pattern_c++] = refnum; \
+    } else{								\
+      freg_object->backref_pos->s_sm_number[freg_object->backref_pos->in_substitute_c++] = refnum; \
+    }									\
+  } while(0);
+*/
+
 
 
 /*** Internal function prototypes ***/
@@ -186,6 +244,14 @@ void           intern__fre__clean_head_table(void);                  /* Free mem
 
 /* TEMPORARY ONLY */
 void print_pattern_hook(fre_pattern* pat);
+int FRE_HANDLE_BREF(char *pattern,
+		    size_t *token_ind,
+		    size_t sub_match_ind,
+		    int fre_is_sub,
+		    fre_pattern *freg_object);
+int FRE_FETCH_MODIFIERS(char *pattern,
+			fre_pattern *freg_object,
+			size_t *token_ind);
 /**/
 
 /** Regex Parser utility routines. **/

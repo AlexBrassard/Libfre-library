@@ -8,9 +8,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
+#include <string.h>
 #include <pthread.h>
 
 #include "fre_internal.h"
+
+
 
 
 /*
@@ -107,13 +110,42 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     intern__fre__errmesg("Intern__fre__strip_pattern");
     goto errjmp;
   }
-
+  
   /* Convert a stripped Perl-like pattern into a POSIX ERE conformant pattern. */
   if (intern__fre__perl_to_posix(freg_object) != FRE_OP_SUCCESSFUL){
     intern__fre__errmesg("Intern__fre__perl_to_posix");
     goto errjmp;
   }
   
+  /*
+   * Loop over the "matching pattern" of the fre_pattern and register
+   * back-reference(s) position(s) before letting _perl_to_posix() modify the pattern.
+   */
+  /*  for (token_ind = 0; token_ind < strlen(freg_object->striped_pattern[0]); token_ind++){
+    if (freg_object->striped_pattern[0][token_ind] == '\\'
+	|| freg_object->striped_pattern[0][token_ind] == '$'){
+      if (isdigit(freg_object->striped_pattern[0][token_ind + 1])){
+	FRE_HANDLE_BREF(token_ind, 0, freg_object);
+	if (errno != 0) return NULL;
+	++token_ind;*/
+	/* 
+
+
+	   LOOK HERE
+
+	   For the digits to be removed out of the pattern, the pattern must be rebuild,
+	   once again from the current token_ind till the end of pattern, and that each
+	   time we find a backref.....
+
+	
+	while (isdigit(freg_object->striped_pattern[0][token_ind])){
+
+	  ++token_ind;
+	}
+      }
+    }
+    }*/
+
   return freg_object; /* Success! */
   
  errjmp:

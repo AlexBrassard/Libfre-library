@@ -21,7 +21,7 @@ void *fre_thread_start(void* arg)
   return;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
 
   /* test */
@@ -30,14 +30,23 @@ int main(void)
   
   size_t i = 0;
   fre_pattern *freg_object = NULL;
-  char pat_to_parse[256]; 
+  char pat_to_parse[FRE_MAX_PATTERN_LENGHT];
 
+  if (argc < 2){
+    fprintf(stderr, "%s: Usage:\n %s [pattern]\n\n", argv[0], argv[0]);
+    return -1;
+  }
+  /*  if ((pat_to_parse = calloc(FRE_MAX_PATTERN_LENGHT, sizeof(char))) == NULL){
+    intern__fre__errmesg("Calloc");
+    return -1;
+    }*/
+  
   /* 
    * This eliminates the "use of uninitialized values" 
    * in _strip_pattern() valgrind complained about.
    */
   memset(pat_to_parse, 0, 256);
-  strcpy(pat_to_parse, "m<^<\\d{3}>>gs");
+  strncpy(pat_to_parse, argv[1], strlen(argv[1]));
   
   if ((freg_object = intern__fre__plp_parser(pat_to_parse)) == NULL) {
     intern__fre__errmesg("Intern__fre__plp_parser");
@@ -59,7 +68,7 @@ int main(void)
       return 0;
     }
   }
-
+  /*  free (pat_to_parse);*/
   intern__fre__free_pattern(freg_object);
   return 0;
 }

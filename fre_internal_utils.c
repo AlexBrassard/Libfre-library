@@ -490,56 +490,30 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
   } while (0) ;
 
 
-/* 
- * Skip all tokens until a newline or a NULL is found, 
- * then trim the pattern's lenght by the ammount of tokens we just skipped.
-
- Might be obsolete, look further down for FRE_SKIP_COMMENT MACRO.
- */
-int intern__fre__skip_comments(char *pattern,
-			       size_t *pattern_len,
-			       size_t *token_ind)
-{
-  size_t i = 0;                              /* Number of tokens skipped. */
-
-  /* HAVE NOT BEEN TESTED ONCE YET */
-
-  while(pattern[*token_ind] != '\n'
-	&& pattern[*token_ind] != '\0'){
-    ++(*token_ind);
-    ++i;
-  }
-  /* Adjust the pattern's lenght, first check for overflow. */
-  if (((*pattern_len) - i) > 0
-      && ((*pattern_len) - i) < FRE_MAX_PATTERN_LENGHT){
-    (*pattern_len) -= i;
-  }
-  else {
-    errno = 0; /* Make sure errno is not set, else _errmesg will call perror() */
-    intern__fre__errmesg("Intern__fre__skip_comments failed to adjust pattern's lenght");
-    errno = EOVERFLOW;
-    return FRE_ERROR;
-  }
-  return FRE_OP_SUCCESSFUL;
-
-} /* intern__fre__skip_comments() */
-
 
 /* Skip commentary tokens and adjust the pattern lenght afterward. */
-#define FRE_SKIP_COMMENTS(pattern, pattern_len, token_ind) do {		\
-    size_t i = 0;							\
-    while((pattern[*token_ind] != '\n')					\
-	  && (pattern[*token_ind] != '\0')) {				\
-      ++(*token_ind); ++i;						\
-    }									\
-    if (((*pattern_len) - i > 0)					\
-	&& ((*pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		\
-      (*pattern_len) -= i;						\
-    } else {								\
-      errno = 0; intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); \
-      errno = EOVERFLOW; return FRE_ERROR;				\
-    }									\
-  } while (0);
+int FRE_SKIP_COMMENTS(char *pattern,
+		      size_t *pattern_len,
+		      size_t *token_ind)
+{
+  size_t i = 0;							
+  while((pattern[*token_ind] != '\n')					
+	&& (pattern[*token_ind] != '\0')) {				
+    ++(*token_ind);
+    ++i;						
+  }
+  /* Adjust the pattern's lenght and check for overflow. */
+  if (((*pattern_len) - i > 0)					
+      && ((*pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		
+    (*pattern_len) -= i;						
+  } else {								
+    errno = 0;
+    intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); 
+    errno = EOVERFLOW;
+    return FRE_ERROR;				
+  }
+  return FRE_OP_SUCCESSFUL;
+} 
 
 
 
@@ -629,6 +603,7 @@ int    bref_num = 0;
 #define FRE_TOKEN pattern[token_ind]
 
   while(1){
+    /* When reaching the end of pattern. */
     if (FRE_TOKEN == '\0'){
       if ((freg_object->fre_op_flag == MATCH
 	   && (numof_seen_delimiter == FRE_EXPECTED_M_OP_DELIMITER))
@@ -656,9 +631,20 @@ int    bref_num = 0;
     /* 
      * Increment numof_seen_tokens here, and
      * decrement it when we find a backref.
+     * The first backref's position is taken from the begining of string,
+     * all following backrefs' positions are taken from the numof_seen_tokens
+     * since the previously found backref.
      */
     ++numof_seen_tokens;
-    
+
+    /* 
+     * When spa_ind gets bigger than 1, Fetch the patterns
+     * modifiers and end _strip_pattern().
+     */
+    if (spa_ind > 1){
+      FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+      break;
+    }
     /* Handle patterns with paired-type delimiters. */
     if (freg_object->fre_paired_delimiters == true){
       /*
@@ -674,18 +660,9 @@ int    bref_num = 0;
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
 	  break;
 	}
-	/* ->fre_op_flag is SUBSTITUTE or TRANSLITERATE */
+	/* Handle patterns of a SUBSTITUTE or TRANSLITERATE operation.*/
 	else {
-	  /*
-	   * If token is the opening delimiter
-	   * If spa_ind is 0 continue,
-	   * Else if spa_ind is 1
-	     reset spa_tos,
-	     increment delimiter_pairs_c, reset numof_seen_tokens,
-	     increment token_ind, 
-	     continue.
-	   * Else it must be a modifier. 
-	   */
+	  /* Handle delimiters for when the delimiter_pairs_c[ount] is 0. */
 	  if(FRE_TOKEN == freg_object->delimiter){
 	    if (spa_ind == 0) { continue; }
 	    else if (spa_ind == 1) {
@@ -695,48 +672,20 @@ int    bref_num = 0;
 	      ++token_ind;
 	      continue;
 	    }
-	    else {
-	      FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
-	      break;
-	    }
 	  }
+	  /* NULL terminate the spa_indexed striped_pattern. */
 	  else if (FRE_TOKEN == freg_object->c_delimiter){
 	    FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
-	    ++spa_ind;
+	    ++spa_ind;	    
 	    continue;
 	  }
-	    
-
-	  /*	
-	    if (spa_ind < 1){
-	  
-	      errno = 0;
-	      intern__fre__errmesg("Missing delimiter in substitute pattern");
-	      return FRE_ERROR;
-	    }
-	    FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
-	    break;
-	    }*/
-	  /*
-	   * Terminate the string and 
-	   * reset the striped_pattern index to reuse it. 
-	   
-	  FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
-	  ++spa_ind;
-	  spa_tos = 0;
-	  ++token_ind;
-	  ++delimiter_pairs_c;
-	  numof_seen_tokens = 0;
-	  continue;                      Get next token. */
 	}
       }
       /* delimiter_pairs > 0 */
       else {
-	/* Found a new pair of delimiters. */
+	/* Handle delimiters when delimiter_pairs_c is not 0. */
 	if (FRE_TOKEN == freg_object->delimiter){
-	  /* Push it to the pattern's stack if the pair counters > 0. */
-	  if (delimiter_pairs_c > 0)
-	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
+	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	  ++delimiter_pairs_c;
 	  ++token_ind;                  /* Get next token. */
 	  continue;
@@ -744,7 +693,7 @@ int    bref_num = 0;
 	/* Found the end of a pair of delimiters. */
 	else if (FRE_TOKEN == freg_object->c_delimiter){
 	  --delimiter_pairs_c;
-	  /* Push it to the pattern's stack if once decremented the pair counter is still > 0. */
+	  /* Push it to the pattern's stack if -> once decremented <- the pair counter is still > 0. */
 	  if (delimiter_pairs_c > 0){
 	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	  }
@@ -754,52 +703,33 @@ int    bref_num = 0;
 	  ++token_ind;                  /* Get next token. */
 	  continue;
 	}
-	/* 
-	   Fetch the substitute pattern's sub-refs positions, if any, right now. 
-	*/
+	/* Fetch the substitute pattern's sub-refs positions, if any, right now. */
 	if ((spa_ind == 1) && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')) {
-	  /* Make sure the next token is a digit. 
-	   *
-	   * Note that backrefs begining with a backslash are handled
-	   * by _certify_esc_seq().
-	   * NO!
-	   * Think twice bout it but I think I said once that all backref must
-	   *  be delt with here, concerning substitute pattern only.
-	   */
 	  if (!isdigit(pattern[token_ind + 1])) {
-	    /* Let '$' be an anchor, the next token a simple character. */
+	    /* Let '$' be an anchor if the next token is not a digit. */
 	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	    ++token_ind;
 	    continue;
 	  }
 	  else {
-	    --numof_seen_tokens;
+	    --numof_seen_tokens; 
 	    FRE_HANDLE_BREF(pattern,
 			    &token_ind,
 			    (freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_seen_tokens,
 			    1, freg_object);
 	    if (errno != 0) return FRE_ERROR;
 	    numof_seen_tokens = 0;
-	    /*	    i = 0;
-	    bref_num = 0;
-	    memset(bref_num_string, 0, FRE_MAX_SUB_MATCHES);
-	    while (isdigit(pattern[token_ind + 1])){
-	      bref_num_string[i++] = pattern[token_ind + 1];
-	      ++token_ind;
-	    }
-	    ++token_ind;
-	    bref_num = atoi(bref_num_string);*/
-
 	    continue; 
 	  }
 	}
-	FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	
+	/* When token is not a backref marker. */
+	FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);	
       }
-    } /* Endof if fre_paired_delimiter is true. */
+    } 
 
     /* Handle non-paired delimiter type. */
     else {
+      /* Handle delimiters. */
       if (FRE_TOKEN == freg_object->delimiter){
 	/* Terminate pattern and adjust spa indexes to build the 2nd pattern, if any. */
 	FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
@@ -816,7 +746,6 @@ int    bref_num = 0;
 	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	}
 	else if (numof_seen_delimiter == FRE_EXPECTED_M_OP_DELIMITER){
-	  //	  FRE_PUSH(FRE_TOKEN, modifiers, &modifiers_tos);
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
 	}
 	else {
@@ -828,11 +757,9 @@ int    bref_num = 0;
       }
       /* Handle substitution and transliteration operations patterns. */
       else {
+	/* We've yet to encounter the expecte amount of delimiters. */
 	if (numof_seen_delimiter < FRE_EXPECTED_ST_OP_DELIMITER) {
-	  /* 
-	   * Note that backref begining with a backslash are handled
-	   * by _certify_esc_seq().
-	   */
+	  /* Handle a back-reference. */
 	  if (spa_ind == 1 && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')){
 	    if (isdigit(pattern[token_ind + 1])){
 	      --numof_seen_tokens;
@@ -844,13 +771,17 @@ int    bref_num = 0;
 	      numof_seen_tokens = 0;
 	      continue;
 	    }
+	    /* 
+	     * Let '$' be an anchor, push it on the pattern's stack
+	     * when the next token is not a digit.
+	     */
 	    else {
-	      /* Let '$' be an anchor, push it on the pattern stack. */
 	      FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	      ++token_ind;
 	      continue;
 	    }
 	  }
+	  /* When token is not a backref marker. */
 	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	}
 	/* 
@@ -867,9 +798,10 @@ int    bref_num = 0;
 	  return FRE_ERROR;
 	}
       }
-    } /* Endof else fre_paired_delimiter is false. */
-    ++token_ind;                        /* Get next token. */
-    
+    }
+
+    /* If we did not hit a continue statement yet, get next token. */
+    ++token_ind;
   } /* while(1) */
 
   return FRE_OP_SUCCESSFUL;
@@ -946,8 +878,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
      */
     ++numof_seen_tokens;
   
-    if (FRE_TOKEN == '\\'
-	     || FRE_TOKEN == '$'){
+    if (FRE_TOKEN == '\\' || FRE_TOKEN == '$'){
       /* Must be a back-reference. */
       if (isdigit(freg_object->striped_pattern[0][token_ind + 1])){
 	--numof_seen_tokens;
@@ -970,6 +901,29 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
       }
     }
 
+    else if (freg_object->fre_mod_ext == true){
+      if (isspace(FRE_TOKEN)) {
+	++token_ind;
+	continue;
+      }
+      else if (FRE_TOKEN == '#'){
+	/* 
+	 * Skip tokens in the unmodified pattern, adjust the
+	 * lenght of the new_pattern, itself based from the lenght of
+	 * the unmodified pattern.
+	 */
+	FRE_SKIP_COMMENTS(freg_object->striped_pattern[0],
+			  &new_pattern_len,
+			  &token_ind);
+      }
+      /* Current token is not special. */
+      else {
+	FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
+	++token_ind;
+	continue;
+      }
+    }
+
     /* Valid token. */
     else {
       FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
@@ -977,9 +931,13 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
     /* Get next token. */
     ++token_ind;
   } /* while(1) */
+
+  /* Replace the matching pattern with the newly created one. */
   memset(freg_object->striped_pattern[0], 0, FRE_MAX_PATTERN_LENGHT);
   memcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT - 1);
+  
   return FRE_OP_SUCCESSFUL;
+  
 } /* intern__fre__perl_to_posix() */
 
 

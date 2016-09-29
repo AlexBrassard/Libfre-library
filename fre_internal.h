@@ -252,6 +252,9 @@ int FRE_HANDLE_BREF(char *pattern,
 int FRE_FETCH_MODIFIERS(char *pattern,
 			fre_pattern *freg_object,
 			size_t *token_ind);
+int FRE_SKIP_COMMENTS(char *pattern,
+		      size_t *pattern_len,
+		      size_t *token_ind);
 /**/
 
 /** Regex Parser utility routines. **/

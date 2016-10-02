@@ -13,11 +13,49 @@
 #include <regex.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>   /* SIZE_MAX */
 #include <errno.h>
 
 #include "fre_internal.h"
 
 extern fre_headnodes *fre_headnode_table;
+
+/* 
+ * Copy source into destination of size n (including the trailing NUL byte).
+ * Note, SU_strcpy() always clears the buffer before
+ * copying results into it. 
+ */
+void *SU_strcpy(char *dest, char *src, size_t n)
+{
+  size_t src_s = 0;
+  
+  
+  if (dest != NULL                /* We need an already initialized buffer. */
+      && src != NULL              /* We need a valid, non-empty source. */
+      && src[0] != '\0'
+      && n > 0                    /* Destination buffer's size must be bigger than 0, */
+      && n < (SIZE_MAX - 1))      /* and smaller than it's type size - 1. */
+    ; /* Valid input. */
+  else {
+    errno = EINVAL;
+    return NULL;
+  }
+  
+  /* Look out for a NULL byte, never past SIZE_MAX - 1. */
+  src_s = strnlen(src, SIZE_MAX - 1);
+  if (src_s > n - 1){ /* -1, we always add a NULL byte at the end of string. */
+    errno = EOVERFLOW;
+    fprintf(stderr,"%s: Source must be at most destination[n - 1]\n\n", __func__);
+    dest = NULL;
+    return dest;
+  }
+  
+  memset(dest, 0, n);
+  memcpy(dest, src, src_s);
+  
+  return dest;
+}
+
 
 /** Memory Allocation Functions **/
 
@@ -397,6 +435,17 @@ fre_pattern* intern__fre__init_pattern(void)
       goto errjmp;
     }
   }
+  if ((freg_object->saved_pattern = malloc(2 * sizeof(char*))) == NULL){
+    intern__fre__errmesg("Malloc");
+    goto errjmp;
+  }
+  for (i = 0; i < 2; i++){
+    if ((freg_object->saved_pattern[i] = calloc(FRE_MAX_PATTERN_LENGHT, sizeof(char))) == NULL){
+      intern__fre__errmesg("Calloc");
+      goto errjmp;
+    }
+  }
+  
   /* Initialize all other fields. */
   freg_object->fre_mod_boleol = false;
   freg_object->fre_mod_newline = false;
@@ -434,6 +483,16 @@ fre_pattern* intern__fre__init_pattern(void)
       free(freg_object->striped_pattern);
       freg_object->striped_pattern = NULL;
     }
+    if (freg_object->saved_pattern != NULL){
+      for (i = 0; i < 2; i++){
+	if (freg_object->saved_pattern[i] != NULL){
+	  free(freg_object->saved_pattern[i]);
+	  freg_object->saved_pattern[i] = NULL;
+	}
+      }
+      free(freg_object->saved_pattern);
+      freg_object->saved_pattern = NULL;
+    }
 
     free(freg_object);
     freg_object = NULL;
@@ -470,6 +529,16 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
     free(freg_object->striped_pattern);
     freg_object->striped_pattern = NULL;
   }
+  if (freg_object->saved_pattern != NULL){
+    for (i = 0; i < 2; i++){
+      if (freg_object->saved_pattern[i] != NULL){
+	free(freg_object->saved_pattern[i]);
+	freg_object->saved_pattern[i] = NULL;
+      }
+    }
+    free(freg_object->saved_pattern);
+    freg_object->saved_pattern = NULL;
+  }
   freg_object->operation = NULL;
 
   free(freg_object);
@@ -477,6 +546,20 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
   return;
 }
 
+
+int intern__fre__compile_pattern(fre_pattern *freg_object)
+{
+  if (regcomp(freg_object->comp_pattern,
+	      freg_object->striped_pattern[0],
+	      (freg_object->fre_mod_icase == true) ? REG_ICASE : 0 |
+	      (freg_object->fre_mod_newline == true) ? 0 : REG_NEWLINE |
+	      REG_EXTENDED) != 0){
+    intern__fre__errmesg("Regcomp");
+    return FRE_ERROR;
+  }
+  freg_object->fre_p1_compiled = true;
+  return FRE_OP_SUCCESSFUL;
+}
 
 /** Regex Parser Utility Functions. **/
 
@@ -932,9 +1015,26 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
     ++token_ind;
   } /* while(1) */
 
-  /* Replace the matching pattern with the newly created one. */
-  memset(freg_object->striped_pattern[0], 0, FRE_MAX_PATTERN_LENGHT);
-  memcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT - 1);
+  /* 
+   * Replace the matching pattern with the newly created one and
+   * make a copy of both striped-pattern pattern into the object's saved_pattern array. 
+   */
+  /*  memset(freg_object->striped_pattern[0], 0, FRE_MAX_PATTERN_LENGHT);*/
+  if (SU_strcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    return FRE_ERROR;
+  }
+  if (SU_strcpy(freg_object->saved_pattern[0], freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    return FRE_ERROR;
+  }
+  if (freg_object->striped_pattern[1][0] != '\0'){
+    if (SU_strcpy(freg_object->saved_pattern[1], freg_object->striped_pattern[1], FRE_MAX_PATTERN_LENGHT) == NULL){
+      intern__fre__errmesg("SU_strcpy");
+      return FRE_ERROR;
+    }
+  }
+  /*  memcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT - 1);*/
   
   return FRE_OP_SUCCESSFUL;
   
@@ -990,8 +1090,10 @@ void print_pattern_hook(fre_pattern* pat)
   fprintf(stderr,"\noperation %s\ncomp_pattern %s\n",
 	  ((pat->operation != NULL) ? "Defined" : "NULL"),
 	  ((pat->comp_pattern != NULL) ? "Defined" : "NULL"));
-  fprintf(stderr, "striped_pattern[0] %s\nstriped_pattern[1] %s\n\n",
+  fprintf(stderr, "striped_pattern[0] %s\nstriped_pattern[1] %s\n",
 	  pat->striped_pattern[0], pat->striped_pattern[1]);
+  fprintf(stderr, "saved_pattern[0] %s\nsaved_pattern[1] %s\n\n",
+	  pat->saved_pattern[0], pat->saved_pattern[1]);
   pthread_mutex_unlock(&fre_stderr_mutex);
   return;
 }

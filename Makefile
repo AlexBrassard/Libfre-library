@@ -20,7 +20,7 @@ ${CC} = ${GNUCC}                 # Your compiler.
 CFLAGS = ${GNUCFLAGS}            # Your compiler's compile flags.
 LDFLAGS = ${GNULDFLAGS}          # Your linker's flags.
 
-OBJECTS = fre_internal_utils.o fre_internal_init.o fre_internal_main.o
+OBJECTS = fre_internal_utils.o fre_internal_init.o fre_internal_main.o fre_bind.o
 
 libname = libfre.so.0.0.1
 
@@ -36,6 +36,8 @@ fre_internal_init.o : fre_internal_init.c fre_internal.h
 fre_internal_main.o : fre_internal_main.c fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_main.c ${LDFLAGS}
 
+fre_bind.o : fre_internal.h fre.h fre_bind.c
+	${CC} ${CFLAGS} -fPIC -c fre_bind.c ${LDFLAGS} 
 
 .PHONY : clean
 clean :

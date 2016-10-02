@@ -1,1 +1,1 @@
-valgrind --leak-check=full --track-origins=yes --show-leak-kinds=all ./test_INTERNAL $1
+valgrind --leak-check=full --track-origins=yes --show-leak-kinds=all $1 $2 $3

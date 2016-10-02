@@ -10,14 +10,14 @@
 #include <errno.h>
 #include "fre_internal.h"
 
-#define pmatch_table (intern__fre__pmatch_location())
+//#define pmatch_table (intern__fre__pmatch_location(NULL))
 
 /* test only. */
 void *fre_thread_start(void* arg)
 {
   fre_pmatch * temp = NULL;
   printf("I am your thread\n");
-  pmatch_table->fre_mod_global = true;
+  fre_pmatch_table->fre_mod_global = true;
   return;
 }
 
@@ -54,8 +54,14 @@ int main(int argc, char **argv)
   }
 
   print_pattern_hook(freg_object);
+  /* Use of an uninitialized value.
+   * Complete _match_op() which does populate the thread's pmatch_table
+   * and see if valgrind still cries. 
+   
+   print_ptable_hook();
+  */
   
-  pmatch_table->fre_mod_global = true;
+  fre_pmatch_table->fre_mod_global = true;
   for (i = 0; i < tnum; i++){
     if (pthread_create(&threads[i], NULL, &fre_thread_start, NULL) != 0){
       perror("Pthread_create");

@@ -34,6 +34,7 @@ typedef struct fre_sm{
 typedef struct fre_pmatch_tab {
   bool                  fre_saved_head;   /* True when this linked-list's headnode is saved in the global table. */
   bool                  fre_mod_global;   /* True when /g is activated, pmatch_table will contain extra nodes. */
+  int                   last_op_ret_val;  /* Value of the last operation. */
   /* Determined by the values in regmatch_t[]. */
   struct fre_pmatch_tab *next_match;      /* Pointer to the node containing positions of the next match. */
   struct fre_pmatch_tab *headnode;        /* Pointer to the pmatch_table's head_node, for easy access. */
@@ -118,6 +119,7 @@ typedef struct fpattern {
   /* Patterns */
   regex_t  *comp_pattern;          /* The compiled regex pattern. */
   char     **striped_pattern;      /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
+  char     **saved_pattern;        /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
 
 } fre_pattern;
 
@@ -160,61 +162,12 @@ extern fre_headnodes *fre_headnode_table;                 /* Global table of lin
     pthread_mutex_unlock(&fre_stderr_mutex);		\
   } while (0);
 
-/*
- * array: Either ->in_pattern or ->in_substitute,
- * token_ind: the current token index of FRE_HANDLE_BREF's pattern,
- * pos_ind: The index to use in ->in_*. 
- */
-#define FRE_REGISTER_BREF_POS(array, s_ind, pos_ind) do {		\
-    if (*pos_ind == 0){							\
-      array[*pos_ind] = *s_ind;						\
-    } else if (*pos_ind > 0) {						\
-      array[*pos_ind] = (*s_ind - array[(*pos_ind) - 1]);		\
-    } else {								\
-      errno = 1; intern__fre__errmesg("FRE_REGISTER_BREF_POS: Invalid back-reference position"); \
-    }									\
-  } while (0);
-
-/*
- * Register the position within a matching or substitute pattern of                                                                
- * the backref begining at token_ind.
- * The first backref (->in_*[0]) position is from the begining of pattern
- * every following backref's position is from the previous backref index (->in_*[i - 1]).
- * errno is set to 0 every time the MACRO is ran, then set to an arbitrary value
- * on error.
- pattern: the pattern being processed by the caller.
- token_ind: used to loop over digits in the callers pattern.
- s_ind: Index of the bref in the pattern being built.
- fre_is_sub: indicate which of ->in_pattern or ->in_substitute to use.
-
- */
-/*
-#define FRE_HANDLE_BREF(pattern, t_ind, s_ind, fre_is_sub, freg_object) do{ \
-    char refnum_string[FRE_MAX_PATTERN_LENGHT];				\
-    size_t i = 0;							\
-    long refnum = 0;							\
-    if (!fre_is_sub){							\
-      freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = s_ind; \
-    } else {								\
-      freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = s_ind; \
-    }									\
-    memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);			\
-    ++(*t_ind);							\
-    do {								\
-      refnum_string[i++] = pattern[(*t_ind)++];			\
-    }while (isdigit(*t_ind));					\
-    refnum = atol(refnum_string);					\
-    if (!fre_is_sub){							\
-      freg_object->backref_pos->p_sm_number[freg_object->backref_pos->in_pattern_c++] = refnum; \
-    } else{								\
-      freg_object->backref_pos->s_sm_number[freg_object->backref_pos->in_substitute_c++] = refnum; \
-    }									\
-  } while(0);
-*/
 
 
 
 /*** Internal function prototypes ***/
+
+void *SU_strcpy(char *dest, char *src, size_t n);                  /* Safely copy src to dest[n] */
 
 /** Library's init/finit. **/
 int          intern__fre__lib_init(void);                          /* Initialize the library's globals. */
@@ -238,12 +191,13 @@ void           intern__fre__free_head_table(void);/*fre_headnodes *table);    Re
 int            intern__fre__push_head(fre_pmatch* head);             /* Add the given headnode to the global headnode_table. */
 /*fre_pmatch*    intern__fre__fetch_head(void);                         Get a headnode from the global headnode_table. */
 void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
-fre_pmatch*    intern__fre__pmatch_location(void);                   /* To access a thread's pmatch-table. */
+fre_pmatch*    intern__fre__pmatch_location(fre_pmatch* new_head);   /* To access a thread's pmatch-table. */
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
-
+int            intern__fre__compile_pattern(fre_pattern *freg_object); /* Compile the modified pattern. */
 
 /* TEMPORARY ONLY */
 void print_pattern_hook(fre_pattern* pat);
+void print_ptable_hook(void);
 int FRE_HANDLE_BREF(char *pattern,
 		    size_t *token_ind,
 		    size_t sub_match_ind,
@@ -273,9 +227,13 @@ int intern__fre__skip_comments(char *pattern,                      /* Skip a com
 			       size_t *pattern_len,
 			       size_t *token_ind);
 
+/** Regex operations routines. **/
+int intern__fre__match_op(char *string,                            /* Execute a match operation. */			  
+			  fre_pattern *freg_object);
+
 
 /* Thread specific pmatch-table. */
-#define fre_pmatch_table (intern__fre__pmatch_location())
+#define fre_pmatch_table (intern__fre__pmatch_location(NULL))
 
 
 #endif /* FRE_INTERNAL_HEADER */

@@ -2,6 +2,7 @@
  *
  *
  *  Libfre library  -  Public header file.
+ *  Version   0.010
  *
  *
  */

@@ -1,6 +1,7 @@
 /*
  *
  *  Libfre library  -  Internal header file.
+ *  Version   0.010
  *
  */
 

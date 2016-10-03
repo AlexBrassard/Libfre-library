@@ -2,6 +2,7 @@
  *
  *
  *  Libfre  -  Initialization and termination routines.
+ *  Version:   0.010
  *
  *
  */

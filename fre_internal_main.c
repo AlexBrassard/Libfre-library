@@ -1,6 +1,7 @@
 /*
  *
  *  Libfre  -  Main internal functions.
+ *  Version:   0.010
  *
  */
 

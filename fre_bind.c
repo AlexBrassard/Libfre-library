@@ -1,6 +1,8 @@
 /*
  *
+ *
  *  Libfre's Public Interface.
+ *  Version  0.010
  *
  *
  */

@@ -162,22 +162,26 @@ fre_backref* intern__fre__init_bref_arr(void)
     intern__fre__errmesg("Malloc");
     return NULL;
   }
-  if ((to_init->in_pattern = calloc(FRE_MAX_SUB_MATCHES, sizeof(int))) == NULL){
-    intern__fre__errmesg("Calloc");
+  if ((to_init->in_pattern = malloc(FRE_MAX_SUB_MATCHES * sizeof(int))) == NULL){
+    intern__fre__errmesg("Malloc");
     goto errjump;
   }
-  if ((to_init->p_sm_number = calloc(FRE_MAX_SUB_MATCHES, sizeof(long))) == NULL){
-    intern__fre__errmesg("Calloc");
+  memset(to_init->in_pattern, -1, FRE_MAX_SUB_MATCHES);
+  if ((to_init->p_sm_number = malloc(FRE_MAX_SUB_MATCHES * sizeof(long))) == NULL){
+    intern__fre__errmesg("Malloc");
     goto errjump;
   }
-  if ((to_init->in_substitute = calloc(FRE_MAX_SUB_MATCHES, sizeof(int))) == NULL){
-    intern__fre__errmesg("Calloc");
+  memset(to_inid->p_sm_number, -1, FRE_MAX_SUB_MATCHES);
+  if ((to_init->in_substitute = malloc(FRE_MAX_SUB_MATCHES * sizeof(int))) == NULL){
+    intern__fre__errmesg("Malloc");
     goto errjump;
   }
-  if ((to_init->s_sm_number = calloc(FRE_MAX_SUB_MATCHES, sizeof(long))) == NULL){
-    intern__fre__errmesg("Calloc");
+  memset(to_init->in_substitute, -1, FRE_MAX_SUB_MATCHES);
+  if ((to_init->s_sm_number = malloc(FRE_MAX_SUB_MATCHES * sizeof(long))) == NULL){
+    intern__fre__errmesg("Malloc");
     goto errjump;
   }
+  memset(to_init->s_sm_number, -1, FRE_MAX_SUB_MATCHES);
   to_init->in_pattern_c = 0;
   to_init->in_substitute_c = 0;
   return to_init;
@@ -1019,7 +1023,6 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
    * Replace the matching pattern with the newly created one and
    * make a copy of both striped-pattern pattern into the object's saved_pattern array. 
    */
-  /*  memset(freg_object->striped_pattern[0], 0, FRE_MAX_PATTERN_LENGHT);*/
   if (SU_strcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
     intern__fre__errmesg("SU_strcpy");
     return FRE_ERROR;
@@ -1034,15 +1037,59 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
       return FRE_ERROR;
     }
   }
-  /*  memcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT - 1);*/
   
   return FRE_OP_SUCCESSFUL;
   
 } /* intern__fre__perl_to_posix() */
 
 
+/* Insert all sub-matches into the given pattern. */
+char* intern__fre__insert_sm(char *string,                  /* The string to match. */
+			     fre_pattern *freg_object,      /* The object used throughout the library. */
+			     size_t fre_is_sub)             /* 0 = matching pattern, 1 substitute pattern. */
+
+{
+  size_t b_count = 0 ;           /* in_pattern backref position. */
+  size_t i = 0;
+  size_t np_ind = 0, sp_ind = 0; /* new_pattern's index, striped_pattern's index. */
+  char new_pattern[FRE_MAX_PATTERN_LENGHT];
+
+  
+  /*
+   * Backreference positions in the pattern are in the freg_object->backref_pos->in_*[]
+   * The backreference number is in the corresponding freg_object->backref_pos->p_sm_number[]
+   * 
+
+   * Insert in freg_object->striped_pattern[0][freg_object->backref_pos->in_pattern[b_count]]
+   * the substring starting at
+   * string[fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[b_count]->bo]]
+   */
+  while (freg_object->backref_pos->in_pattern[bcount] != -1)
+  memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
+  for (np_ind = 0;
+       np_ind < freg_object->backref_pos->in_pattern[b_count]
+	 && np_ind < FRE_MAX_PATTERN_LENGHT;
+       np_ind++){
+    new_pattern[np_ind] = freg_object->striped_pattern[fre_is_sub][sp_ind++];
+  }
+  /* The index of the table's sub_match must be the "real number" of the current backreference. */
+  i = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
+
+  /* Insert the matched sub-match into the striped pattern. */
+  while (i < fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo){
+    if (np_ind >= FRE_MAX_PATTERN_LENGHT) {
+      errno = EOVERFLOW;
+      intern__fre__errmesg("Overflow during sub-match substitution");
+      return NULL;
+    }
+    new_pattern[np_ind++] = string[i++];
+  }
+    
+
+}
 
 
+  
 /* 
  * Debug hook
  * Print all values of a given fre_pattern object.

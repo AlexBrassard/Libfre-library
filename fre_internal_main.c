@@ -193,21 +193,26 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
     /* break ? */
   }
     
-  while (1) {
-    /* Match. */
-    REGEXEC_MATCH = true;
-    /* Save the position of the complete match. */
-    fre_pmatch_table->whole_match->bo = regmatch_array[0].rm_so;
-    fre_pmatch_table->whole_match->eo = regmatch_array[0].rm_eo;
-    i = 1;
-    while (regmatch_array[i].rm_so != -1){
-      fre_pmatch_table->sub_match[sub_match_ind]->bo = (regmatch_array[i].rm_so + offset_to_start);
-      fre_pmatch_table->sub_match[sub_match_ind]->eo = (regmatch_array[i].rm_eo + offset_to_start);
-      sub_match_ind++;
-      i++;
-    }
-    break;
+
+  /* Match. */
+  REGEXEC_MATCH = true;
+  /* Save the position of the complete match. */
+  fre_pmatch_table->whole_match->bo = regmatch_array[0].rm_so;
+  fre_pmatch_table->whole_match->eo = regmatch_array[0].rm_eo;
+  i = 1;
+  while (regmatch_array[i].rm_so != -1){
+    fre_pmatch_table->sub_match[sub_match_ind]->bo = (regmatch_array[i].rm_so + offset_to_start);
+    fre_pmatch_table->sub_match[sub_match_ind]->eo = (regmatch_array[i].rm_eo + offset_to_start);
+    sub_match_ind++;
+    i++;
   }
+
+  /* Handle back-references now. */
+  if (freg_object->fre_op_bref == true){
+    freg_object->fre_op_bref = false;
+
+  }
+  
   return FRE_OP_SUCCESSFUL;
   
  errjmp:

@@ -3,12 +3,12 @@
  *  Libfre  -  Complete routine list.
  *
  */
----- Nothing has been made.
-P--- Pseudo-coded.
--C-- Coded.
---M- Is a MACRO.
----O Is obsolete but kept for some reasons.
-
+----  Nothing has been made.
+P---  Pseudo-coded.
+-C--  Coded.
+--M-  Is a MACRO.
+---O  Is obsolete but kept for some reasons.
+----I Static Inline function.
 PCMO	      function_name	   file(abreviation) Description
 
 /** Intern API **/
@@ -30,21 +30,23 @@ PCM-	      FRE_SKIP_COMMENTS              utils.c Skip commentary in extended Pe
 PCM-	      FRE_CERTIFY_ESC_SEQ            utils.c Verify escape sequences, replacing non-supported for supported constructs.
 PCM-	      FRE_FETCH_MODIFIERS            utils.c Fetches and validate modifiers.
 PCM-	      FRE_HANDLE_BREF                utils.c Registers the position within a pattern of a back-reference.
-P---	      intern__fre__insert_sm	     utils.c Insert a sub-match inside a pattern.
+PC--	      intern__fre__insert_sm	     utils.c Insert a sub-match inside a pattern.
 P---	      intern__fre__cut_match	     utils.c Cut a matched sequence of chars from the matched string.
 PC--	      intern__fre__strip_pattern     utils.c Strip off a pattern from its Perl-like elements.
 -C--	      intern__fre__compile_pattern   utils.c Compile the converted Perl-like pattern.
 PC--	      intern__fre__perl_to_posix     utils.c Convert a stripped-off, perl-like pattern into a POSIX conformant pattern.
 
--C--	      intern__fre__fetch_head	     init.c  Used by threads to fetch their linked-list's headnode.
+-C--I	      intern__fre__fetch_head	     init.c  Used by threads to fetch their linked-list's headnode.
 PC--	      intern__fre__pmatch_location   init.c  Returns the address of a per-thread pmatch_table.
 PC--	      intern__fre__lib_init	     init.c  Initializes the library (mostly for pmatch_table).
 PC--	      intern__fre__lib_finit	     init.c  Terminate the library (mostly for pmatch_table).
 PC--	      intern__fre__key_delete	     init.c  Delete the pthread_key_t passed to pthread_key_create. 
+
 PC--	      intern__fre__plp_parser	     main.c  Parse the given Perl-like pattern.
 P---	      intern__fre__match_op	     main.c  Execute a matching operation.
 ----	      intern__fre__substitute_op     main.c  Execute a substitution operation.
 ----	      intern__fre__transliterate_op  main.c  Execute a transliteration operation.
+
 -CM-	      intern__fre__errmesg	     fre_internal.h	Print a debug/error message.
 
 

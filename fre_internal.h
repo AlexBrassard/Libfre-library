@@ -194,11 +194,17 @@ int            intern__fre__push_head(fre_pmatch* head);             /* Add the 
 void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
 fre_pmatch*    intern__fre__pmatch_location(fre_pmatch* new_head);   /* To access a thread's pmatch-table. */
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
-int            intern__fre__compile_pattern(fre_pattern *freg_object); /* Compile the modified pattern. */
 
-/* TEMPORARY ONLY */
+int            intern__fre__compile_pattern(fre_pattern *freg_object);/* Compile the modified pattern. */
+char*          intern__fre__insert_sm(fre_pattern *freg_object,      /* Insert all sub-matches in the given pattern. */
+				      char *string,
+				      size_t is_sub);
+
+/* DEBUG only. */
 void print_pattern_hook(fre_pattern* pat);
 void print_ptable_hook(void);
+
+/* Likely to become MACROS. */
 int FRE_HANDLE_BREF(char *pattern,
 		    size_t *token_ind,
 		    size_t sub_match_ind,
@@ -222,12 +228,7 @@ int          intern__fre__perl_to_posix(fre_pattern *freg_object); /*
 								    * Convert a stripped Perl-like pattern into a
 								    * POSIX ERE conformant pattern. 
 								    */
-
 					
-int intern__fre__skip_comments(char *pattern,                      /* Skip a commentary when the '/x' modifier is activated. */
-			       size_t *pattern_len,
-			       size_t *token_ind);
-
 /** Regex operations routines. **/
 int intern__fre__match_op(char *string,                            /* Execute a match operation. */			  
 			  fre_pattern *freg_object);

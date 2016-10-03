@@ -171,7 +171,7 @@ fre_backref* intern__fre__init_bref_arr(void)
     intern__fre__errmesg("Malloc");
     goto errjump;
   }
-  memset(to_inid->p_sm_number, -1, FRE_MAX_SUB_MATCHES);
+  memset(to_init->p_sm_number, -1, FRE_MAX_SUB_MATCHES);
   if ((to_init->in_substitute = malloc(FRE_MAX_SUB_MATCHES * sizeof(int))) == NULL){
     intern__fre__errmesg("Malloc");
     goto errjump;
@@ -1043,53 +1043,85 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
 } /* intern__fre__perl_to_posix() */
 
 
+
+
 /* Insert all sub-matches into the given pattern. */
-char* intern__fre__insert_sm(char *string,                  /* The string to match. */
-			     fre_pattern *freg_object,      /* The object used throughout the library. */
-			     size_t fre_is_sub)             /* 0 = matching pattern, 1 substitute pattern. */
+char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used throughout the library. */
+			     char *string,                  /* The string to match. */
+			     size_t is_sub)             /* 0 = matching pattern, 1 substitute pattern. */
 
 {
-  size_t b_count = 0 ;           /* in_pattern backref position. */
-  size_t i = 0;
-  size_t np_ind = 0, sp_ind = 0; /* new_pattern's index, striped_pattern's index. */
+  int bcount = 0;             /* The index of the ->in_pattern[] backref we're working on. */
+  int string_ind = 0;         /* Index of the current sub-match token within the caller's string. */
+  int prev_sm_lenght = 0;     /* Lenght of the previously substituted sub-match. */
+  size_t numof_seen_tokens = 0;  /* 
+				  * If bcount == 0, from the begining of ->striped_pattern[is_sub],
+				  * If bcount  > 0, from the next token past the end of the last sub-match replacement. 
+				  */
+  int np_ind = 0, sp_ind = 0; /* new_pattern's index, striped_pattern[is_sub]'s index. */
   char new_pattern[FRE_MAX_PATTERN_LENGHT];
 
-  
-  /*
-   * Backreference positions in the pattern are in the freg_object->backref_pos->in_*[]
-   * The backreference number is in the corresponding freg_object->backref_pos->p_sm_number[]
-   * 
-
-   * Insert in freg_object->striped_pattern[0][freg_object->backref_pos->in_pattern[b_count]]
-   * the substring starting at
-   * string[fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[b_count]->bo]]
-   */
-  while (freg_object->backref_pos->in_pattern[bcount] != -1)
   memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
-  for (np_ind = 0;
-       np_ind < freg_object->backref_pos->in_pattern[b_count]
-	 && np_ind < FRE_MAX_PATTERN_LENGHT;
-       np_ind++){
-    new_pattern[np_ind] = freg_object->striped_pattern[fre_is_sub][sp_ind++];
-  }
-  /* The index of the table's sub_match must be the "real number" of the current backreference. */
-  i = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
-
-  /* Insert the matched sub-match into the striped pattern. */
-  while (i < fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo){
-    if (np_ind >= FRE_MAX_PATTERN_LENGHT) {
-      errno = EOVERFLOW;
-      intern__fre__errmesg("Overflow during sub-match substitution");
-      return NULL;
+  while(freg_object->striped_pattern[is_sub][sp_ind] != '\0'
+	&& sp_ind <= FRE_MAX_PATTERN_LENGHT) {
+    if (bcount == 0){
+      if (freg_object->backref_pos->in_pattern[bcount] != -1) {
+	if (sp_ind == freg_object->backref_pos->in_pattern[bcount]){
+	  for (string_ind = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
+	       string_ind <= fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo;
+	       string_ind++) {
+	    new_pattern[np_ind++] = string[string_ind];
+	    ++prev_sm_lenght; /* Set the lenght of the sub-match. */
+	  }
+	  /* Get next backref */
+	  ++bcount;
+	  continue;
+	}
+	else {
+	  new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
+	}
+      }
+      else {
+	/* 
+	 * Note that ->in_pattern[bcount] is -1. Should get caught on first itteration if it's to happen ~ . 
+	 * Return the pattern unmodified.
+	 */
+	return freg_object->striped_pattern[is_sub]; 
+      }
     }
-    new_pattern[np_ind++] = string[i++];
+    /* Bcount > 0 */
+    if (freg_object->backref_pos->in_pattern[bcount] != -1){
+      /* 
+       * Add the lenght of the previous sub-match replacement to 
+       * the offset ->in_pattern[bcount] to find where in ->striped_pattern to replace
+       * the next backref.
+       */
+      if (sp_ind == (prev_sm_lenght + freg_object->backref_pos->in_pattern[bcount])){
+	prev_sm_lenght = 0;
+	for (string_ind = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
+	     string_ind <= fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo;
+	     string_ind++) {
+	  new_pattern[np_ind++] = string[string_ind];
+	  ++prev_sm_lenght;
+	}
+	/* Get next backref. */
+	++bcount;
+	continue;
+      }
+    }
+    new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
+  } /* while( freg_object->striped_patern.... */
+  if (SU_strcpy(freg_object->striped_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    return NULL;
   }
-    
 
-}
-
-
+  return freg_object->striped_pattern[is_sub];
   
+} /* intern__fre__insert_sm() */
+
+
+
 /* 
  * Debug hook
  * Print all values of a given fre_pattern object.

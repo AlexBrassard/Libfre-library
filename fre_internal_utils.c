@@ -646,6 +646,7 @@ int FRE_HANDLE_BREF(char *pattern,
   char refnum_string[FRE_MAX_PATTERN_LENGHT];
   long refnum = 0;
   size_t i = 0;
+  freg_object->fre_op_bref = true;
   if (!fre_is_sub) {
     freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = sub_match_ind;
   }
@@ -1061,13 +1062,19 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
   char new_pattern[FRE_MAX_PATTERN_LENGHT];
 
   memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
-  while(freg_object->striped_pattern[is_sub][sp_ind] != '\0'
-	&& sp_ind <= FRE_MAX_PATTERN_LENGHT) {
+  while(sp_ind <= FRE_MAX_PATTERN_LENGHT) {
+    if (freg_object->striped_pattern[is_sub][sp_ind] == '\0'
+	&& freg_object->backref_pos->in_pattern[bcount] == -1)
+      break;
+    
     if (bcount == 0){
       if (freg_object->backref_pos->in_pattern[bcount] != -1) {
 	if (sp_ind == freg_object->backref_pos->in_pattern[bcount]){
-	  for (string_ind = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
-	       string_ind <= fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo;
+
+	  /* LOOK HERE WITH GDB */
+	  
+	  for (string_ind = fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->bo;
+	       string_ind < fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->eo;
 	       string_ind++) {
 	    new_pattern[np_ind++] = string[string_ind];
 	    ++prev_sm_lenght; /* Set the lenght of the sub-match. */
@@ -1078,6 +1085,7 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
 	}
 	else {
 	  new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
+	  continue;
 	}
       }
       else {
@@ -1097,8 +1105,8 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
        */
       if (sp_ind == (prev_sm_lenght + freg_object->backref_pos->in_pattern[bcount])){
 	prev_sm_lenght = 0;
-	for (string_ind = fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->bo;
-	     string_ind <= fre_pmatch_table->sub_match[freg_object->backref_pos->p_sm_number[bcount]]->eo;
+	for (string_ind = fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->bo;
+	     string_ind <= fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->eo;
 	     string_ind++) {
 	  new_pattern[np_ind++] = string[string_ind];
 	  ++prev_sm_lenght;

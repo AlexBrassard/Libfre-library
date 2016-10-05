@@ -140,6 +140,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
   int reg_retval = 0;
   char *string_copy = NULL;
   size_t string_len = 0;
+  size_t i = 0, sm_ind = 0;
   regmatch_t regmatch_arr[FRE_MAX_SUB_MATCHES];
 
 
@@ -155,6 +156,10 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
     intern__fre__errmesg("Calloc");
     return FRE_ERROR;
   }
+  if (SU_strcpy(string_copy, string, string_len) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    goto errjmp;
+  }
   
   if ((reg_retval = regexec(freg_object->comp_pattern, string, FRE_MAX_SUB_MATCHES,
 			    regmatch_arr, 0)) != 0) {
@@ -169,8 +174,19 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 
   /* Match! */
   fre_pmatch_table->last_op_ret_val = FRE_OP_SUCCESSFUL;
+  if (regmatch_arr[i].rm_so != -1){
+    fre_pmatch_table->whole_match->bo = regmatch_arr[i].rm_so;
+    fre_pmatch_table->whole_match->eo = regmatch_arr[i].rm_eo;
+  }
+  ++i;
+  while(regmatch_arr[i].rm_so != -1){
+    fre_pmatch_table->sub_match[sm_ind]->bo = regmatch_arr[i].rm_so;
+    fre_pmatch_table->sub_match[sm_ind]->eo = regmatch_arr[i].rm_eo;
+    ++sm_ind;
+    ++i;
+  }
   if (freg_object->fre_op_bref == true){
-    if (intern__fre__insert_sm(freg_object, string_copy, 0) != NULL){
+    if (intern__fre__insert_sm(freg_object, string_copy, 0) == NULL){
       intern__fre__errmesg("Intern__fre__insert_sm");
       goto errjmp;
     }
@@ -230,7 +246,7 @@ void print_ptable_hook(void)
 	  "Whole_match->bo", fre_pmatch_table->whole_match->bo,
 	  "->eo", fre_pmatch_table->whole_match->eo);
   for (i = 0;
-       i < FRE_MAX_SUB_MATCHES || fre_pmatch_table->sub_match[i]->bo != -1;
+       i < FRE_MAX_SUB_MATCHES;
        i++){
     fprintf(stderr, "Sub_match[%zu]->bo: %d\n             ->eo:%d\n",
 	    i, fre_pmatch_table->sub_match[i]->bo, fre_pmatch_table->sub_match[i]->eo);

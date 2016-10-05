@@ -295,6 +295,7 @@ fre_pmatch* intern__fre__init_pmatch_node(void)
   to_init->fre_mod_global = false;
   to_init->next_match = NULL;
   to_init->headnode = NULL;
+  to_init->last_op_ret_val = 0;
 
   return to_init; /* Success! */
 
@@ -463,7 +464,7 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->fre_op_flag = NONE;
   freg_object->fre_op_bref = false;
   freg_object->operation = NULL;
-
+  
   /* All set. */
   return freg_object;
 
@@ -518,8 +519,9 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
   }
   /* Check if fre_p1_compiled is true, if yes regfree the pattern first. */
   if (freg_object->comp_pattern != NULL){
-    if (freg_object->fre_p1_compiled == true)
+    if (freg_object->fre_p1_compiled == true){
       regfree(freg_object->comp_pattern);
+    }
     free(freg_object->comp_pattern);
     freg_object->comp_pattern = NULL;
   }
@@ -1054,10 +1056,7 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
   int bcount = 0;             /* The index of the ->in_pattern[] backref we're working on. */
   int string_ind = 0;         /* Index of the current sub-match token within the caller's string. */
   int prev_sm_lenght = 0;     /* Lenght of the previously substituted sub-match. */
-  size_t numof_seen_tokens = 0;  /* 
-				  * If bcount == 0, from the begining of ->striped_pattern[is_sub],
-				  * If bcount  > 0, from the next token past the end of the last sub-match replacement. 
-				  */
+
   int np_ind = 0, sp_ind = 0; /* new_pattern's index, striped_pattern[is_sub]'s index. */
   char new_pattern[FRE_MAX_PATTERN_LENGHT];
 
@@ -1121,7 +1120,42 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
 } /* intern__fre__insert_sm() */
 
 
+/*
+ * Remove a character sequence from a NUL terminated string. 
+ * No error checks are made. 
+ * Self warning >>> Possible comparaison againt signed vs unsigned int. <<<
+ */
+char* intern__fre__cut_match(char *string,
+			     size_t string_size, /* No to be confused with the lenght. */
+			     size_t bo,          /* Begining of match string index. */
+			     size_t eo)          /* Ending of match string index.   */
+{
+  char *new_string = NULL;
+  size_t ns_ind = 0, i = 0;
 
+  if ((new_string = calloc(string_size, sizeof(char))) == NULL){
+    intern__fre__errmesg("Calloc");
+    return NULL;
+  }
+  while (i <= string_size && string[i] != '\0'){
+    if (i == bo){
+      while (i++ <= eo) ;
+      continue;
+    }
+    new_string[ns_ind++] = string[i++];
+  }
+  if (SU_strcpy(string, new_string, string_size) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    if (new_string)
+      free(new_string);
+    return NULL;
+  }
+  if (new_string)
+    free(new_string);
+  return string;
+
+} /* intern__fre__cut_match() */
+  
 /* 
  * Debug hook
  * Print all values of a given fre_pattern object.

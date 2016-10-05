@@ -74,7 +74,8 @@ Fragment or reduce the size of your input.\n\n",
     /* If really we made it all the way here with an invalid operation just abort everything. */
     abort();
   }
-
+  intern__fre__free_pattern(freg_object);
+  freg_object = NULL;
   /* Check how the operation went. */
   if (retval == FRE_ERROR){
     intern__fre__errmesg("_op_match: Failed to execute matching operation");
@@ -85,6 +86,6 @@ Fragment or reduce the size of your input.\n\n",
   else if(retval == FRE_OP_UNSUCCESSFUL){
     puts("No match.");
   }
-
+  
   return retval;
 }

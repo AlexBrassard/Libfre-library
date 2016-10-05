@@ -93,34 +93,34 @@ typedef enum foperation {
 /* Structure of a fre_pattern. */
 typedef struct fpattern {
   /* Pattern modifiers */
-  bool     fre_mod_boleol;         /* True when the '/m' modifier is activated. */
-  bool     fre_mod_newline;        /* True when the '/s' modifier is activated. */
-  bool     fre_mod_icase;          /* True when the '/i' modifier is activated. */
-  bool     fre_mod_ext;            /* True when the '/x' modifier is activated. */
-  bool     fre_mod_global;         /* True when the '/g' modifier is activated. */
+  bool     fre_mod_boleol;                     /* True when the '/m' modifier is activated. */
+  bool     fre_mod_newline;                    /* True when the '/s' modifier is activated. */
+  bool     fre_mod_icase;                      /* True when the '/i' modifier is activated. */
+  bool     fre_mod_ext;                        /* True when the '/x' modifier is activated. */
+  bool     fre_mod_global;                     /* True when the '/g' modifier is activated. */
 
   /* Indicate whether or not to regfree() the pattern. */
-  bool     fre_p1_compiled;        /* True when stripped_pattern[0] has been regcomp()'d. */
+  bool     fre_p1_compiled;                    /* True when stripped_pattern[0] has been regcomp()'d. */
 
   /* Pattern's delimiter(s) */
-  bool     fre_paired_delimiters;  /* True when delimiter is one of  { ( [ <  */
-  char     delimiter;              /* The delimiter used in the pattern. */
-  char     c_delimiter;            /* Closing delimiter, when using paired-type delimiters. */
+  bool     fre_paired_delimiters;              /* True when delimiter is one of  { ( [ <  */
+  char     delimiter;                          /* The delimiter used in the pattern. */
+  char     c_delimiter;                        /* Closing delimiter, when using paired-type delimiters. */
 
   /* Operation related flags */
-  fre_op_f fre_op_flag;            /* Indicate the pattern's type of operation. */
+  fre_op_f fre_op_flag;                        /* Indicate the pattern's type of operation. */
 
   /* Back-reference related */
-  bool     fre_op_bref;            /* True when back-reference(s) are found in a pattern. */
-  fre_backref *backref_pos;        /* Contains positions of back-references, when fre_op_bref is true. */
+  bool     fre_op_bref;                        /* True when back-reference(s) are found in a pattern. */
+  fre_backref *backref_pos;                    /* Contains positions of back-references, when fre_op_bref is true. */
   
   /* Pointer to the operation to be executed, determined by the fre_op_flag. */
   int      (*operation)(struct fpattern*, char*);
 
   /* Patterns */
-  regex_t  *comp_pattern;          /* The compiled regex pattern. */
-  char     **striped_pattern;      /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
-  char     **saved_pattern;        /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
+  regex_t  *comp_pattern;                      /* The compiled regex pattern. */
+  char     **striped_pattern;                  /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
+  char     **saved_pattern;                    /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
 
 } fre_pattern;
 
@@ -188,9 +188,8 @@ void           intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the
 fre_pattern*   intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
 void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
 fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */
-void           intern__fre__free_head_table(void);/*fre_headnodes *table);    Release resources of the global headnode_table. */
+void           intern__fre__free_head_table(void);                   /* Release resources of the global headnode_table. */
 int            intern__fre__push_head(fre_pmatch* head);             /* Add the given headnode to the global headnode_table. */
-/*fre_pmatch*    intern__fre__fetch_head(void);                         Get a headnode from the global headnode_table. */
 void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
 fre_pmatch*    intern__fre__pmatch_location(fre_pmatch* new_head);   /* To access a thread's pmatch-table. */
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
@@ -199,6 +198,10 @@ int            intern__fre__compile_pattern(fre_pattern *freg_object);/* Compile
 char*          intern__fre__insert_sm(fre_pattern *freg_object,      /* Insert all sub-matches in the given pattern. */
 				      char *string,
 				      size_t is_sub);
+char*          intern__fre__cut_match(char *string,                  /* Remove a character sequence from a string. */
+				      size_t string_size,
+				      size_t bo,
+				      size_t eo);
 
 /* DEBUG only. */
 void print_pattern_hook(fre_pattern* pat);

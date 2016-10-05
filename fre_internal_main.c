@@ -136,91 +136,87 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
 int intern__fre__match_op(char *string,                  /* The string to bind the pattern against. */
 			  fre_pattern *freg_object)      /* The information gathered by the _plp_parser(). */
 {
-  int    reg_ret = 0;                                    /* To hold regexec's return value. */
-  size_t i = 0;
-  size_t string_lenght = 0;
-  size_t sub_match_ind = 0;
-  size_t string_copy_bo = 0;                             /* String_copy's begining of match. */
-  size_t offset_to_start = 0;                            /* 
-							  * Offset from the current begining of match 
-							  * down to the begining of string. 
-							  */
-  regmatch_t regmatch_array[FRE_MAX_SUB_MATCHES];        /* To fetch the sub matches' positions. */
-  char *string_copy = NULL;                              /* Our copy of the caller's string. */
-  bool REGEXEC_MATCH = false;                              /* 
-							  * Since regexec might be called multiple times within
-							  * a single _match_op() invocation, we use this flag to
-							  * determine a successful return or not.
-							  */
+  bool bref_flag_wastrue = freg_object->fre_op_bref;
+  int reg_retval = 0;
+  char *string_copy = NULL;
+  size_t string_len = 0;
+  regmatch_t regmatch_arr[FRE_MAX_SUB_MATCHES];
 
-  /* Using INT_MAX (FRE_ARG_STRING_MAX_LENGHT) since sub-matches position are saved as integers. */
-  if ((string_lenght = strlen(string) >= (FRE_ARG_STRING_MAX_LENGHT - 1))){
-    errno = EOVERFLOW;
+
+  if (string == NULL
+      || freg_object == NULL){
+    errno = EINVAL;
     return FRE_ERROR;
   }
-  else {
-    if ((string_copy = calloc(FRE_ARG_STRING_MAX_LENGHT, sizeof(char))) == NULL){
-      intern__fre__errmesg("Calloc");
-      return FRE_ERROR;
-    }
-    if (SU_strcpy(string_copy, string, FRE_ARG_STRING_MAX_LENGHT) == NULL){
-      intern__fre__errmesg("SU_strcpy");
-      goto errjmp;
-    }
-    /*   memcpy(string_copy, string, string_lenght);
-    string_copy[string_lenght + 1] = '\0';*/
-  }
-
-  /*
-   * To avoid looping throught every arrays of every node of a thread's 
-   * pmatch_table, we garantee that ->whole_match->*o is set to a valid index or
-   * -1 when no matches are found. ->sub_array[] will contain either valid indexes or 
-   * garbage values if whole_match->*o is set to -1.
-   */
-  for (i = 0; i < FRE_MAX_SUB_MATCHES; i++){
-    fre_pmatch_table->whole_match->bo = -1;
-    fre_pmatch_table->whole_match->eo = -1;
-    intern__fre__pmatch_location(fre_pmatch_table->next_match);
-  }
-  /* Go back to the list's headnode. */
-  intern__fre__pmatch_location(fre_pmatch_table->headnode);
   
-
-  if ((reg_ret = regexec(freg_object->comp_pattern, string_copy, FRE_MAX_SUB_MATCHES, regmatch_array, 0)) != 0) {
-    if (reg_ret != REG_NOMATCH){
+  string_len = strnlen(string, FRE_ARG_STRING_MAX_LENGHT);
+  string_len++; /* 1 for the NUL byte. */
+  if ((string_copy = calloc(string_len, sizeof(char))) == NULL) {
+    intern__fre__errmesg("Calloc");
+    return FRE_ERROR;
+  }
+  
+  if ((reg_retval = regexec(freg_object->comp_pattern, string, FRE_MAX_SUB_MATCHES,
+			    regmatch_arr, 0)) != 0) {
+    if (reg_retval != REG_NOMATCH) {
       intern__fre__errmesg("Regexec");
       goto errjmp;
     }
-    /* break ? */
-  }
-    
-
-  /* Match. */
-  REGEXEC_MATCH = true;
-  /* Save the position of the complete match. */
-  fre_pmatch_table->whole_match->bo = regmatch_array[0].rm_so;
-  fre_pmatch_table->whole_match->eo = regmatch_array[0].rm_eo;
-  i = 1;
-  while (regmatch_array[i].rm_so != -1){
-    fre_pmatch_table->sub_match[sub_match_ind]->bo = (regmatch_array[i].rm_so + offset_to_start);
-    fre_pmatch_table->sub_match[sub_match_ind]->eo = (regmatch_array[i].rm_eo + offset_to_start);
-    sub_match_ind++;
-    i++;
+    if (fre_pmatch_table->last_op_ret_val != FRE_OP_SUCCESSFUL)
+      fre_pmatch_table->last_op_ret_val = FRE_OP_UNSUCCESSFUL;
+    goto skip_match; /* Above the return statement. */
   }
 
-  /* Handle back-references now. */
+  /* Match! */
+  fre_pmatch_table->last_op_ret_val = FRE_OP_SUCCESSFUL;
   if (freg_object->fre_op_bref == true){
+    if (intern__fre__insert_sm(freg_object, string_copy, 0) != NULL){
+      intern__fre__errmesg("Intern__fre__insert_sm");
+      goto errjmp;
+    }
     freg_object->fre_op_bref = false;
+    regfree(freg_object->comp_pattern);
+    if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
+      intern__fre__errmesg("Intern__fre__compile_pattern");
+      goto errjmp;
+    }
+    if (intern__fre__match_op(string_copy, freg_object) == FRE_ERROR){
+      intern__fre__errmesg("Intern__fre__match_op");
+      goto errjmp;
+    }
 
+    /* Check if the matching operation has global scope. */
+    if (freg_object->fre_mod_global == true){
+      /* Restore ->striped_pattern[0] (Saved in ->striped_pattern[2]) */
+      if (SU_strcpy(freg_object->striped_pattern[0], freg_object->striped_pattern[2], FRE_MAX_PATTERN_LENGHT) == NULL){
+	intern__fre__errmesg("SU_strcpy");
+	goto errjmp;
+      }
+      freg_object->fre_op_bref = bref_flag_wastrue;
+      /* Remove whatever matched from our own copy of the caller's string and recurse. */
+      if (intern__fre__cut_match(string_copy, string_len,
+				 fre_pmatch_table->whole_match->bo, fre_pmatch_table->whole_match->eo) == NULL){
+	intern__fre__errmesg("Intern__fre__cut_match");
+	goto errjmp;
+      }
+      intern__fre__pmatch_location(fre_pmatch_table->next_match);
+      if (intern__fre__match_op(string_copy, freg_object) == FRE_ERROR){
+	intern__fre__errmesg("Intern__fre__match_op");
+	goto errjmp;
+      }
+    }
   }
-  
-  return FRE_OP_SUCCESSFUL;
-  
- errjmp:
-  if (string_copy != NULL){
+ skip_match:
+  if (string_copy)
     free(string_copy);
-    string_copy = NULL;
-  }
+  string_copy = NULL;
+  return fre_pmatch_table->last_op_ret_val;
+
+ errjmp:
+  if (string_copy)
+    free(string_copy);
+  string_copy = NULL;
+
   return FRE_ERROR;
 }
 

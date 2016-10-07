@@ -199,6 +199,7 @@ char*          intern__fre__insert_sm(fre_pattern *freg_object,      /* Insert a
 				      char *string,
 				      size_t is_sub);
 char*          intern__fre__cut_match(char *string,                  /* Remove a character sequence from a string. */
+				      size_t *numof_tokens_skiped,
 				      size_t string_size,
 				      size_t bo,
 				      size_t eo);
@@ -234,7 +235,8 @@ int          intern__fre__perl_to_posix(fre_pattern *freg_object); /*
 					
 /** Regex operations routines. **/
 int intern__fre__match_op(char *string,                            /* Execute a match operation. */			  
-			  fre_pattern *freg_object);
+			  fre_pattern *freg_object,
+			  size_t *offset_to_start);
 
 
 /* Thread specific pmatch-table. */

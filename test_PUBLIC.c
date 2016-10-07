@@ -51,5 +51,10 @@ int main(int argc, char **argv)
   }
 
   retval = fre_bind(argv[1], string);
+  if (string){
+    free(string);
+    string = NULL;
+  }
+
   return retval;
 }

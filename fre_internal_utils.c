@@ -256,6 +256,8 @@ fre_smatch* intern__fre__init_smatch(void)
     intern__fre__errmesg("Malloc");
     return NULL;
   }
+  to_init->bo = -1;
+  to_init->eo = -1;
   return to_init;
 
 } /* intern__fre__init_smatch() */
@@ -634,6 +636,12 @@ int FRE_FETCH_MODIFIERS(char *pattern,
     }
     (*token_ind)++;
   }
+  /* 
+   * Decrement token_ind to fix an off by 1 error where token_ind would end up 1 more than the
+   * terminating NUL byte of pattern, which was still in the process' address space causing chaos.
+   */
+  --(*token_ind);
+  
   return FRE_OP_SUCCESSFUL;
 }
 
@@ -1070,9 +1078,6 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
     if (bcount == 0){
       if (freg_object->backref_pos->in_pattern[bcount] != -1) {
 	if (sp_ind == freg_object->backref_pos->in_pattern[bcount]){
-
-	  /* LOOK HERE WITH GDB */
-	  
 	  for (string_ind = fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->bo;
 	       string_ind < fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->eo;
 	       string_ind++) {
@@ -1132,22 +1137,31 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
  * Remove a character sequence from a NUL terminated string. 
  * No error checks are made. 
  * Self warning >>> Possible comparaison againt signed vs unsigned int. <<<
+
+ Add a parameter: numof_token_skipped. Then modify _match_op() to add this 
+ offset to each match/sub-match position. this should fix the current
+ position misalignment (or whatever it's called :) 
+
  */
 char* intern__fre__cut_match(char *string,
-			     size_t string_size, /* No to be confused with the lenght. */
-			     size_t bo,          /* Begining of match string index. */
-			     size_t eo)          /* Ending of match string index.   */
+			     size_t *numof_tokens_skiped, /* Number of tokens skiped by cut_match. */
+			     size_t string_size,          /* No to be confused with the lenght. */
+			     size_t bo,                   /* Begining of match string index. */
+			     size_t eo)                   /* Ending of match string index.   */
 {
   char *new_string = NULL;
-  size_t ns_ind = 0, i = 0;
+  size_t ns_ind = 0, i = 0, offset_to_start = *numof_tokens_skiped;
 
   if ((new_string = calloc(string_size, sizeof(char))) == NULL){
     intern__fre__errmesg("Calloc");
     return NULL;
   }
   while (i <= string_size && string[i] != '\0'){
-    if (i == bo){
-      while (i++ <= eo) ;
+    if (i == (bo - offset_to_start)){
+      while (i < (eo - offset_to_start)){
+	++i;
+	++(*numof_tokens_skiped);
+      }
       continue;
     }
     new_string[ns_ind++] = string[i++];

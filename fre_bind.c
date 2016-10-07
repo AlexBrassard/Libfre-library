@@ -25,6 +25,7 @@ int fre_bind(char *pattern,       /* The regex pattern. */
    * Call the operation in the fre_pattern object returned by the parser.
    */
   size_t pattern_len = 0, string_len = 0;
+  size_t offset_to_start = 0;              /* To keep _match_op's positions in line with the original string. */
   fre_pattern *freg_object = NULL;
   int retval = 0;
 
@@ -62,7 +63,8 @@ Fragment or reduce the size of your input.\n\n",
   
   switch (freg_object->fre_op_flag){
   case MATCH :
-    retval = intern__fre__match_op(string, freg_object);
+    retval = intern__fre__match_op(string, freg_object, &offset_to_start);
+    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case SUBSTITUTE:
     puts("Will do substitution operation");

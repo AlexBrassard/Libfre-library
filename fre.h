@@ -16,7 +16,8 @@
 /** Function prototype **/
 
 int fre_bind(char *pattern,            /* The regex pattern. */
-	     char *string);            /* The string to bind the pattern against. */
+	     char *string,             /* The string to bind the pattern against. */
+	     size_t string_size);      /* The string's size (not its lenght). */
 
 
 

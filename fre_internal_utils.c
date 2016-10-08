@@ -464,7 +464,8 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->delimiter = '\0';
   freg_object->c_delimiter = '\0';
   freg_object->fre_op_flag = NONE;
-  freg_object->fre_op_bref = false;
+  freg_object->fre_match_op_bref = false;
+  freg_object->fre_subs_op_bref = false;
   freg_object->operation = NULL;
   
   /* All set. */
@@ -654,12 +655,13 @@ int FRE_HANDLE_BREF(char *pattern,
   char refnum_string[FRE_MAX_PATTERN_LENGHT];
   long refnum = 0;
   size_t i = 0;
-  freg_object->fre_op_bref = true;
   if (!fre_is_sub) {
     freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = sub_match_ind;
+    freg_object->fre_match_op_bref = true;
   }
   else {
     freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = sub_match_ind;
+    freg_object->fre_subs_op_bref = true;
   }
   memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);
   ++(*token_ind);
@@ -1055,11 +1057,10 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
 
 
 
-
 /* Insert all sub-matches into the given pattern. */
 char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used throughout the library. */
 			     char *string,                  /* The string to match. */
-			     size_t is_sub)             /* 0 = matching pattern, 1 substitute pattern. */
+			     size_t is_sub)
 
 {
   int bcount = 0;             /* The index of the ->in_pattern[] backref we're working on. */
@@ -1067,19 +1068,23 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
   int prev_sm_lenght = 0;     /* Lenght of the previously substituted sub-match. */
 
   int np_ind = 0, sp_ind = 0; /* new_pattern's index, striped_pattern[is_sub]'s index. */
+  int *in_array = ((is_sub == 0) ? freg_object->backref_pos->in_pattern : freg_object->backref_pos->in_substitute);
+  long *sm_number = ((is_sub == 0) ? freg_object->backref_pos->p_sm_number : freg_object->backref_pos->s_sm_number);
   char new_pattern[FRE_MAX_PATTERN_LENGHT];
 
+
+    
   memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
   while(sp_ind <= FRE_MAX_PATTERN_LENGHT) {
     if (freg_object->striped_pattern[is_sub][sp_ind] == '\0'
-	&& freg_object->backref_pos->in_pattern[bcount] == -1)
+	&& in_array[bcount] == -1)
       break;
     
     if (bcount == 0){
-      if (freg_object->backref_pos->in_pattern[bcount] != -1) {
-	if (sp_ind == freg_object->backref_pos->in_pattern[bcount]){
-	  for (string_ind = fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->bo;
-	       string_ind < fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->eo;
+      if (in_array[bcount] != -1) {
+	if (sp_ind == in_array[bcount]){
+	  for (string_ind = fre_pmatch_table->sub_match[(sm_number[bcount] - 1)]->bo;
+	       string_ind < fre_pmatch_table->sub_match[(sm_number[bcount] - 1)]->eo;
 	       string_ind++) {
 	    new_pattern[np_ind++] = string[string_ind];
 	    ++prev_sm_lenght; /* Set the lenght of the sub-match. */
@@ -1102,16 +1107,16 @@ char* intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used t
       }
     }
     /* Bcount > 0 */
-    if (freg_object->backref_pos->in_pattern[bcount] != -1){
+    if (in_array[bcount] != -1){
       /* 
        * Add the lenght of the previous sub-match replacement to 
        * the offset ->in_pattern[bcount] to find where in ->striped_pattern to replace
        * the next backref.
        */
-      if (sp_ind == (prev_sm_lenght + freg_object->backref_pos->in_pattern[bcount])){
+      if (sp_ind == (prev_sm_lenght + in_array[bcount])){
 	prev_sm_lenght = 0;
-	for (string_ind = fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->bo;
-	     string_ind <= fre_pmatch_table->sub_match[(freg_object->backref_pos->p_sm_number[bcount] - 1)]->eo;
+	for (string_ind = fre_pmatch_table->sub_match[(sm_number[bcount] - 1)]->bo;
+	     string_ind <= fre_pmatch_table->sub_match[(sm_number[bcount] - 1)]->eo;
 	     string_ind++) {
 	  new_pattern[np_ind++] = string[string_ind];
 	  ++prev_sm_lenght;
@@ -1202,12 +1207,13 @@ void print_pattern_hook(fre_pattern* pat)
 	  ((pat->fre_p1_compiled == true) ? "true" : "false"),
 	  ((pat->fre_paired_delimiters == true) ? "true" : "false"),
 	  pat->delimiter, pat->c_delimiter);
-  fprintf(stderr, "Operation type: %s\nfre_op_bref %s\n",
+  fprintf(stderr, "Operation type: %s\nfre_match_op_bref %s\nfre_subs_op_bref %s\n",
 	  ((pat->fre_op_flag == NONE) ? "NONE" :
 	   (pat->fre_op_flag == MATCH) ? "MATCH" :
 	   (pat->fre_op_flag == SUBSTITUTE) ? "SUBSTITUTE" :
 	   (pat->fre_op_flag == TRANSLITERATE) ? "TRANSLITERATE" : "Error, invalid flag"),
-	  ((pat->fre_op_bref == true) ? "true" : "false"));
+	  ((pat->fre_match_op_bref == true) ? "true" : "false"),
+	  ((pat->fre_subs_op_bref == true) ? "true" : "false"));
   fprintf(stderr, "backref_pos\t %-17s:", "in_pattern");
   for (i = 0; i < pat->backref_pos->in_pattern_c; i++){
     fprintf(stderr, "%d ", pat->backref_pos->in_pattern[i]);

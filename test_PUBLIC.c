@@ -49,8 +49,9 @@ int main(int argc, char **argv)
     memcpy(string, argv[2], DEF_ARR_SIZE);
     string[DEF_ARR_SIZE - 1] = '\0';
   }
-
-  retval = fre_bind(argv[1], string);
+  printf("Input: %s\n\n", string);
+  retval = fre_bind(argv[1], string, new_lenght);
+  printf("Output: %s\n\n", string);
   if (string){
     free(string);
     string = NULL;

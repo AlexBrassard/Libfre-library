@@ -111,7 +111,8 @@ typedef struct fpattern {
   fre_op_f fre_op_flag;                        /* Indicate the pattern's type of operation. */
 
   /* Back-reference related */
-  bool     fre_op_bref;                        /* True when back-reference(s) are found in a pattern. */
+  bool     fre_match_op_bref;                  /* True when back-reference(s) are found in a matching pattern. */
+  bool     fre_subs_op_bref;                   /* True when back-reference(s) are found in the substitute pattern. */
   fre_backref *backref_pos;                    /* Contains positions of back-references, when fre_op_bref is true. */
   
   /* Pointer to the operation to be executed, determined by the fre_op_flag. */
@@ -234,10 +235,13 @@ int          intern__fre__perl_to_posix(fre_pattern *freg_object); /*
 								    */
 					
 /** Regex operations routines. **/
-int intern__fre__match_op(char *string,                            /* Execute a match operation. */			  
-			  fre_pattern *freg_object,
-			  size_t *offset_to_start);
-
+int          intern__fre__match_op(char *string,                   /* Execute a match operation. */			  
+				   fre_pattern *freg_object,
+				   size_t *offset_to_start);
+int          intern__fre__substitute_op(char *string,              /* Execute a substitution operation. */
+					size_t string_size,
+					fre_pattern *freg_object,
+				        size_t *offset_to_start);
 
 /* Thread specific pmatch-table. */
 #define fre_pmatch_table (intern__fre__pmatch_location(NULL))

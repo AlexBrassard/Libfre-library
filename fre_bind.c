@@ -18,7 +18,8 @@
 
 
 int fre_bind(char *pattern,       /* The regex pattern. */
-	     char *string)        /* The string to bind the pattern against. */
+	     char *string,        /* The string to bind the pattern against. */
+	     size_t string_size)  /* The size of string. (NOT THE LENGHT !) */
 {
   /*
    * Parse the pattern using the _plp_parser.
@@ -67,7 +68,8 @@ Fragment or reduce the size of your input.\n\n",
     print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case SUBSTITUTE:
-    puts("Will do substitution operation");
+    retval = intern__fre__substitute_op(string, string_size, freg_object, &offset_to_start);
+    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case TRANSLITERATE:
     puts("Will do transliteration operation");

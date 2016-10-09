@@ -1171,11 +1171,16 @@ char* intern__fre__cut_match(char *string,
     }
     new_string[ns_ind++] = string[i++];
   }
-  if (SU_strcpy(string, new_string, string_size) == NULL){
-    intern__fre__errmesg("SU_strcpy");
-    if (new_string)
-      free(new_string);
-    return NULL;
+  if (string_size <= 2){
+    string[0] = '\0';
+  }
+  else {
+    if (SU_strcpy(string, new_string, string_size) == NULL){
+      intern__fre__errmesg("SU_strcpy");
+      if (new_string)
+	free(new_string);
+      return NULL;
+    }
   }
   if (new_string)
     free(new_string);

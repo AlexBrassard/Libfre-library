@@ -9,16 +9,28 @@
 
 This small library will give user the access to one simple function:
 
-fre_bind(perl-like_regex_pattern, string);
+fre_bind(perl-like_regex_pattern, string, string_size);
 
-which tries to mimic as closely as possible Perl's bind operator '=~' that
+Fre_bind tries to mimic as closely as possible Perl's bind operator '=~' that
 binds a regex pattern against a string, executing the operation designated by
-the pattern used
+the pattern used.
 
-The user's given Perl-like regular expression will then be parsed internaly
-by the library
+Libfre achieves to keep POSIX conformance by converting any Perl-like elements of a
+given pattern into POSIX constructs.
+
 
 'fre' stands for "Findf Regular Expression" since it was first born within the Libfindf library,
 and I'm not very original with names.
+
+
+Version 0.00 up to 1.00 will concentrate on making things works, especialy the 3 basic operations:
+match, substitution and transliteration, with only limited support for most non-POSIX compatible
+Perl-like constructs.
+"Messy" functions or blocks will be either cleaned/simplified or simply rewritten before v1.00.
+
+Version 1.01 up to 2.00 will concentrate on adding support for most if not all non-POSIX compatible
+Perl-like constructs.
+
+Further versions will concentrate on profiling and optimizations.
 
 I will carefuly explain what the fre_bind() function does once I get it sorted out! :)

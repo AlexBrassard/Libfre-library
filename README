@@ -11,12 +11,15 @@ This small library will give user the access to one simple function:
 
 fre_bind(perl-like_regex_pattern, string, string_size);
 
+Which let its users use the Perl REGEX syntax and operations on POSIX systems
+with no extra dependencies.
+
 Fre_bind tries to mimic as closely as possible Perl's bind operator '=~' that
 binds a regex pattern against a string, executing the operation designated by
 the pattern used.
 
 Libfre achieves to keep POSIX conformance by converting any Perl-like elements of a
-given pattern into POSIX constructs.
+given pattern that are not POSIX compatible into POSIX constructs.
 
 
 'fre' stands for "Findf Regular Expression" since it was first born within the Libfindf library,

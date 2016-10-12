@@ -3,7 +3,7 @@
  *
  *
  *  Libfre  -  Internal utilities.
- *  Version:   0.300
+ *  Version:   0.400
  *
  */
 
@@ -1050,7 +1050,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object){
       return FRE_ERROR;
     }
   }
-  
+
   return FRE_OP_SUCCESSFUL;
   
 } /* intern__fre__perl_to_posix() */

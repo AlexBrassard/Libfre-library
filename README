@@ -7,12 +7,12 @@
  */
 
 
-This small library will give user the access to one simple function:
+This small library will give its users access to this one simple function:
 
-fre_bind(perl-like_regex_pattern, string, string_size);
+    fre_bind(char *pattern, char *string, size_t string_size);
 
-Which let its users use the Perl REGEX syntax and operations on POSIX systems
-with no extra dependencies.
+Which let its users use Perl's REGEX syntax and operations on POSIX.1-2008 systems
+with no extra dependencies. 
 
 Fre_bind tries to mimic as closely as possible Perl's bind operator '=~' that
 binds a regex pattern against a string, executing the operation designated by
@@ -20,20 +20,24 @@ the pattern used.
 
 Libfre achieves to keep POSIX conformance by converting any Perl-like elements of a
 given pattern that are not POSIX compatible into POSIX constructs.
-
+Results and behaviours of a given pattern depends greatly on your locale.
 
 'fre' stands for "Findf Regular Expression" since it was first born within the Libfindf library,
 and I'm not very original with names.
 
 
-Version 0.00 up to 1.00 will concentrate on making things works, especialy the 3 basic operations:
-match, substitution and transliteration, with only limited support for most non-POSIX compatible
-Perl-like constructs.
-"Messy" functions or blocks will be either cleaned/simplified or simply rewritten before v1.00.
 
-Version 1.01 up to 2.00 will concentrate on adding support for most if not all non-POSIX compatible
-Perl-like constructs.
+-Version 0.00 up to 1.00 will concentrate on making things works, especialy the 3 basic operations:
+   match, substitution and transliteration, with only limited support for most non-POSIX compatible
+   Perl-like constructs.
+   "Messy" functions or blocks will be either cleaned/simplified or simply rewritten before v1.00.
+   A short manpage is to be added before v1.00 and likely extended with every added features and functionalities.
 
-Further versions will concentrate on profiling and optimizations.
 
-I will carefuly explain what the fre_bind() function does once I get it sorted out! :)
+-Version 1.01 up to 2.00 will concentrate on adding support for most if not all non-POSIX compatible
+   Perl-like constructs.
+
+
+-Further versions will concentrate on profiling and optimizations.
+
+

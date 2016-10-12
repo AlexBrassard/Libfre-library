@@ -2,7 +2,7 @@
  *
  *
  *  Libfre's Public Interface.
- *  Version  0.300
+ *  Version  0.400
  *
  *
  */
@@ -72,7 +72,8 @@ Fragment or reduce the size of your input.\n\n",
     print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case TRANSLITERATE:
-    puts("Will do transliteration operation");
+    retval = intern__fre__transliterate_op(string, string_size, freg_object);
+    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   default:
     /* If really we made it all the way here with an invalid operation just abort everything. */

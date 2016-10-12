@@ -1,7 +1,7 @@
 /*
  *
  *  Libfre library  -  Internal header file.
- *  Version   0.010
+ *  Version   0.400
  *
  */
 
@@ -148,8 +148,9 @@ typedef struct fpattern {
 
 static const char FRE_PAIRED_O_DELIMITERS[]   = "<({[";   /* Opening paired-type delimiters. */
 static const char FRE_PAIRED_C_DELIMITERS[]   = ">)}]";   /* Closing paired-type delimiters. */
-static const char FRE_POSIX_DIGIT_RANGE[]     = "[0-9]";  /* Used mostly to replace '\d' escape sequence. */
-static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0-9]"; /* Used mostly to replace '\D' escape sequence. */
+static const char FRE_POSIX_DIGIT_RANGE[]     = "[0123456789]";  /* Used mostly to replace '\d' escape sequence. */
+static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0123456789]"; /* Used mostly to replace '\D' escape sequence. */
+
 extern fre_headnodes *fre_headnode_table;                 /* Global table of linked-lists headnodes, use with care. */
 
 /* Simple error message. */
@@ -210,6 +211,10 @@ void print_pattern_hook(fre_pattern* pat);
 void print_ptable_hook(void);
 
 /* Likely to become MACROS. */
+void FRE_INSERT_DASH_RANGE(char *array,
+			   size_t *token_ind,
+			   int low,
+			   int high);
 int FRE_HANDLE_BREF(char *pattern,
 		    size_t *token_ind,
 		    size_t sub_match_ind,
@@ -242,6 +247,9 @@ int          intern__fre__substitute_op(char *string,              /* Execute a 
 					size_t string_size,
 					fre_pattern *freg_object,
 				        size_t *offset_to_start);
+int          intern__fre__transliterate_op(char *string,           /* Execute a transliteration operation. */
+					   size_t string_size,
+					   fre_pattern *freg_object);
 
 /* Thread specific pmatch-table. */
 #define fre_pmatch_table (intern__fre__pmatch_location(NULL))

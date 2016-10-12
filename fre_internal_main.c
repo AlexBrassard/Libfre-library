@@ -1,7 +1,7 @@
 /*
  *
  *  Libfre  -  Main internal functions.
- *  Version:   0.300
+ *  Version:   0.400
  *
  */
 
@@ -112,10 +112,15 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     goto errjmp;
   }
   
-  /* Convert a stripped Perl-like pattern into a POSIX ERE conformant pattern. */
-  if (intern__fre__perl_to_posix(freg_object) != FRE_OP_SUCCESSFUL){
-    intern__fre__errmesg("Intern__fre__perl_to_posix");
-    goto errjmp;
+  /* 
+   * Convert a stripped Perl-like pattern, that's not a transliteration opeartion,
+   * into a POSIX ERE conformant pattern. 
+   */
+  if (freg_object->fre_op_flag != TRANSLITERATE){
+    if (intern__fre__perl_to_posix(freg_object) != FRE_OP_SUCCESSFUL){
+      intern__fre__errmesg("Intern__fre__perl_to_posix");
+      goto errjmp;
+    }
   }
 
   /* Compile the modified pattern. */
@@ -390,16 +395,163 @@ int intern__fre__substitute_op(char *string,
   return FRE_ERROR;
 
 } /* intern__fre__substitute_op() */
-    
 
 
+/* MUST ONLY REMOVE THE LEADING [ AND TRAILING ] !!!!! */
+#define FRE_INSERT_DIGIT_RANGE(array, token_ind) do {			\
+    size_t i = 1; /* The zeroth char of FRE_POSIX_DIGIT_RANGE is '[' */	\
+    while (FRE_POSIX_DIGIT_RANGE[i] != ']') {				\
+      array[(*token_ind)++] = FRE_POSIX_DIGIT_RANGE[i++];		\
+    }									\
+  } while (0);
 
+/* 
+ * Verify and insert a dash separated range. 
+ * A dash separated range may be between any two printable characters,
+ * so long as they appear in increasing order. It depends greatly on your locale.
+ * Starting at *token_ind, insert the appropriate range in array.
 
+ * ASCII only!!!
+*/
+void FRE_INSERT_DASH_RANGE(char *array, size_t *token_ind, int low, int high)
+{
+  do {
+    int temp = 0;
+    int current = low;
+    if (low >= high){
+      temp = low; low = high; high = temp;
+    }
+    while (current <= high)
+      array[(*token_ind)++] = current++;
+  } while (0);
+}
 
+/* Execute a transliteration operation (paired-character substitution). */
+int intern__fre__transliterate_op(char *string,
+				  size_t string_size,
+				  fre_pattern *freg_object)
+{
 
+  size_t i = 0, j = 0, token_ind = 0;
+  size_t mp_count = 0, sp_count = 0; /* Matching/substitute pattern counters. */
+  size_t sp_ind = 0;
+  char **new_striped_p = NULL;
+  char *new_string = NULL;
 
+  if (!string || !freg_object || string_size == 0){
+    errno = EINVAL;
+    return FRE_ERROR;
+  }
 
+  if ((new_string = calloc(string_size, sizeof(char))) == NULL){
+    intern__fre__errmesg("Calloc");
+    return FRE_ERROR;
+  }
+  if ((new_striped_p = malloc(2 * sizeof(char*))) == NULL){
+    intern__fre__errmesg("Malloc");
+    goto errjmp;
+  }
+  for (i = 0; i < 2; i++)
+    if ((new_striped_p[i] = calloc(FRE_MAX_PATTERN_LENGHT, sizeof(char))) == NULL){
+      intern__fre__errmesg("Calloc");
+      goto errjmp;
+    }
+ 
+  /*
+   * Ranges are the only supported special characters in a
+   * transliteration operation pattern. Look for and replace them.
+   */
+  while(sp_ind < 2){
+    j = 0; i = 0;
+    while(freg_object->striped_pattern[sp_ind][i] != '\0') {
+      if (freg_object->striped_pattern[sp_ind][i] == '\\'
+	  && freg_object->striped_pattern[sp_ind][i + 1] == 'd'){
+	FRE_INSERT_DIGIT_RANGE(new_striped_p[sp_ind], &j);
+	i += 2; /* skip \d */
+	continue;
+      }
+      else if (freg_object->striped_pattern[sp_ind][i] == '-'){
+	--j; /* Since the first character has already been added to new_s_p. */
+	FRE_INSERT_DASH_RANGE(new_striped_p[sp_ind], &j,
+			      freg_object->striped_pattern[sp_ind][i - 1],
+			      freg_object->striped_pattern[sp_ind][i + 1]);
+	i += 2; /* skip -x */
+	continue;
+      }
+      new_striped_p[sp_ind][j++] = freg_object->striped_pattern[sp_ind][i++];
+    }
+    if (SU_strcpy(freg_object->striped_pattern[sp_ind],
+		  new_striped_p[sp_ind],
+		  FRE_MAX_PATTERN_LENGHT) == NULL){
+      intern__fre__errmesg("SU_strcpy");
+      goto errjmp;
+    }
+    ++sp_ind;
+  }
+  /* 
+   * If both patterns of a transliteration expression do not contain a matching
+   * number of characters its a syntax error.
+   */
+  if (strlen(freg_object->striped_pattern[0]) !=
+      strlen(freg_object->striped_pattern[1])){
+    errno = 0;
+    intern__fre__errmesg("Syntax error: Non-matching number of tokens in transliteration operation pattern.");
+    goto errjmp;
+  }
+      
+  /* No need for these arrays anymore. */
+  if (new_striped_p){
+    for (i = 0; i < 2; i++){
+      if (new_striped_p[i]){
+	free(new_striped_p[i]);
+	new_striped_p[i] = NULL;
+      }
+    }
+    free(new_striped_p);
+    new_striped_p = NULL;
+  }
 
+  /* Transliterate right here, right now ! */
+  for (i = 0, token_ind = 0; string[i] != '\0'; i++){
+    j = 0;
+    while (freg_object->striped_pattern[0][j] != '\0') {
+      if (string[i] == freg_object->striped_pattern[0][j]){
+	new_string[token_ind++] = freg_object->striped_pattern[1][j];
+	j = 0;
+	++i;
+	continue;
+      }
+      j++;
+    }
+    new_string[token_ind++] = string[i];
+  }
+  new_string[token_ind] = '\0';
+  if (SU_strcpy(string, new_string, string_size) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    goto errjmp;
+  }
+  free(new_string);
+  new_string = NULL;
+
+  return FRE_OP_SUCCESSFUL;
+  
+ errjmp:
+  if (new_striped_p){
+    for (i = 0; i < 2; i++){
+      if (new_striped_p[i]){
+	free(new_striped_p[i]);
+	new_striped_p[i] = NULL;
+      }
+    }
+    free(new_striped_p);
+    new_striped_p = NULL;
+  }
+  if (new_string){
+    free(new_string);
+    new_string = NULL;
+  }
+  return FRE_ERROR;
+}
   
 
 

@@ -43,9 +43,11 @@ PC--	      intern__fre__lib_finit	     init.c  Terminate the library (mostly for
 PC--	      intern__fre__key_delete	     init.c  Delete the pthread_key_t passed to pthread_key_create. 
 
 PC--	      intern__fre__plp_parser	     main.c  Parse the given Perl-like pattern.
-P---	      intern__fre__match_op	     main.c  Execute a matching operation.
-----	      intern__fre__substitute_op     main.c  Execute a substitution operation.
-----	      intern__fre__transliterate_op  main.c  Execute a transliteration operation.
+PC--	      intern__fre__match_op	     main.c  Execute a matching operation.
+PC--	      intern__fre__substitute_op     main.c  Execute a substitution operation.
+-CM-	      FRE_INSERT_DIGIT_RANGE	     main.c  Insert a digit range in pattern.
+-CM-	      FRE_INSERT_DASH_RANGE	     main.c  Insert a "dash range" in pattern.
+PC--	      intern__fre__transliterate_op  main.c  Execute a transliteration operation.
 
 -CM-	      intern__fre__errmesg	     fre_internal.h	Print a debug/error message.
 

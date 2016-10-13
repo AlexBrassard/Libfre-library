@@ -52,14 +52,26 @@ Fragment or reduce the size of your input.\n\n",
     errno = EOVERFLOW;
     return FRE_ERROR;
   }
-
+  if (fre_pmatch_table->ls_pattern != NULL) {
+    if (strcmp(fre_pmatch_table->ls_pattern, pattern) == 0){
+      if (fre_pmatch_table->fre_saved_object == true){
+	freg_object = fre_pmatch_table->ls_object;
+	goto skip_plp_parser;
+      }
+    }
+  }
   /* Parse the caller's pattern. */
   if ((freg_object = intern__fre__plp_parser(pattern)) == NULL){
     intern__fre__errmesg("_plp_parser: Failed to parse the given pattern");
     return FRE_ERROR;
   }
+  if (SU_strcpy(fre_pmatch_table->ls_pattern, pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    return FRE_ERROR;
+  }
+  fre_pmatch_table->ls_object = freg_object;
 
-
+ skip_plp_parser:
   /* Execute the operation. will make it more fancy later. testing for now. */
   
   switch (freg_object->fre_op_flag){

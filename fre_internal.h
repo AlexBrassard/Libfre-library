@@ -31,32 +31,6 @@ typedef struct fre_sm{
 
 } fre_smatch;
 
-/* Per-thread global sub-match table kept between invocations of fre_bind(). */
-typedef struct fre_pmatch_tab {
-  bool                  fre_saved_head;   /* True when this linked-list's headnode is saved in the global table. */
-  bool                  fre_mod_global;   /* True when /g is activated, pmatch_table will contain extra nodes. */
-  int                   last_op_ret_val;  /* Value of the last operation. */
-  /* Determined by the values in regmatch_t[]. */
-  struct fre_pmatch_tab *next_match;      /* Pointer to the node containing positions of the next match. */
-  struct fre_pmatch_tab *headnode;        /* Pointer to the pmatch_table's head_node, for easy access. */
-  fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
-  fre_smatch            **sub_match;      /* Array of sub-match offsets. */
-  
-} fre_pmatch;
-
-/* 
- * Global table containing pointers to headnodes of all created 
- * pmatch-tables to allow _lib_finit to free them.
- */
-typedef struct fre_head_tab {
-  size_t                numof_tables;     /*obsolete Number of nodes in the array. */
-  size_t                sizeof_table;     /* The size of the array. */
-  size_t                head_list_tos;    /* The headnode list's first available element. */
-  pthread_mutex_t       *table_lock;      /* To serialize access to the table. */
-  fre_pmatch            **head_list;      /* Array of pointers to pmatch_table headnodes. */
-
-
-} fre_headnodes;
 
 
 /* To keep track of where in each patterns are the back-references. */
@@ -124,6 +98,37 @@ typedef struct fpattern {
   char     **saved_pattern;                    /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
 
 } fre_pattern;
+
+/* Per-thread global sub-match table kept between invocations of fre_bind(). */
+typedef struct fre_pmatch_tab {
+  bool                  fre_saved_head;   /* Obsolete, kept while I'm making sure it really is. */
+  bool                  fre_mod_global;   /* True when /g is activated, pmatch_table will contain extra nodes. */
+  bool                  fre_saved_object; /* True when an fre_pattern has been saved in ->ls_object. */
+  int                   last_op_ret_val;  /* Value of the last operation. */
+  char                  *ls_pattern;      /* Last pattern seen by the _plp_parser(). */
+  fre_pattern           *ls_object;       /* Last fre_pattern* returned by the _plp_parser(). */
+  struct fre_pmatch_tab *next_match;      /* Pointer to the node containing positions of the next match. */
+  struct fre_pmatch_tab *headnode;        /* Pointer to the pmatch_table's head_node, for easy access. */
+  /* Determined by the values in regmatch_t[]. */
+  fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
+  fre_smatch            **sub_match;      /* Array of sub-match offsets. */
+  
+} fre_pmatch;
+
+/* 
+ * Global table containing pointers to headnodes of all created 
+ * pmatch-tables to allow _lib_finit to free them.
+ */
+typedef struct fre_head_tab {
+  size_t                numof_tables;     /*obsolete Number of nodes in the array. */
+  size_t                sizeof_table;     /* The size of the array. */
+  size_t                head_list_tos;    /* The headnode list's first available element. */
+  pthread_mutex_t       *table_lock;      /* To serialize access to the table. */
+  fre_pmatch            **head_list;      /* Array of pointers to pmatch_table headnodes. */
+
+
+} fre_headnodes;
+
 
 
 

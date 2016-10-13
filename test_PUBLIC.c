@@ -14,7 +14,7 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-  size_t i = 0;
+  size_t i = 0, c = 0;
   int retval = 0;
   int string_len = 0;
   int new_lenght = DEF_ARR_SIZE;
@@ -50,7 +50,8 @@ int main(int argc, char **argv)
     string[DEF_ARR_SIZE - 1] = '\0';
   }
   printf("Input: %s\n\n", string);
-  retval = fre_bind(argv[1], string, new_lenght);
+  while (c++ < 100)
+    retval = fre_bind(argv[1], string, new_lenght);
   printf("Output: %s\n\n", string);
   if (string){
     free(string);

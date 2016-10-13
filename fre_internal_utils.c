@@ -280,6 +280,14 @@ fre_pmatch* intern__fre__init_pmatch_node(void)
     intern__fre__errmesg("Malloc");
     return NULL;
   }
+  if ((to_init->ls_pattern = calloc(FRE_MAX_PATTERN_LENGHT, sizeof(char))) == NULL){
+    intern__fre__errmesg("Calloc");
+    goto errjmp;
+  }
+  /*  if ((to_init->ls_object = malloc(sizeof(fre_pattern*))) == NULL){
+    intern__fre__errmesg("Malloc");
+    goto errjmp;
+    }*/
   if ((to_init->whole_match = intern__fre__init_smatch()) == NULL){
     intern__fre__errmesg("Intern__fre__init_smatch");
     goto errjmp;
@@ -295,6 +303,7 @@ fre_pmatch* intern__fre__init_pmatch_node(void)
     }
   }
   to_init->fre_mod_global = false;
+  to_init->fre_saved_object = false;
   to_init->next_match = NULL;
   to_init->headnode = NULL;
   to_init->last_op_ret_val = 0;
@@ -303,6 +312,14 @@ fre_pmatch* intern__fre__init_pmatch_node(void)
 
  errjmp:
   if (to_init != NULL){
+    if (to_init->ls_pattern){
+      free(to_init->ls_pattern);
+      to_init->ls_pattern = NULL;
+    }
+    /*    if (to_init->ls_object){
+      free(to_init->ls_object);
+      to_init->ls_object = NULL;
+      }*/
     if (to_init->whole_match != NULL){
       free(to_init->whole_match);
       to_init->whole_match = NULL;
@@ -379,7 +396,15 @@ void intern__fre__free_pmatch_node(fre_pmatch *to_free)
       free(to_free->whole_match);
       to_free->whole_match = NULL;
     }
-    
+    if (to_free->ls_pattern != NULL){
+      free(to_free->ls_pattern);
+      to_free->ls_pattern = NULL;
+    }
+    /*    if (to_free->ls_object != NULL){
+      free(to_free->ls_object);
+      to_free->ls_object = NULL;
+      }*/
+    to_free->ls_object = NULL;
     to_free->next_match = NULL;
     to_free->headnode = NULL;
     free(to_free);

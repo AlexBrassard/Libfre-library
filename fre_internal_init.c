@@ -2,7 +2,7 @@
  *
  *
  *  Libfre  -  Initialization and termination routines.
- *  Version:   0.300
+ *  Version:   0.400
  *
  *
  */
@@ -66,10 +66,6 @@ void __attribute__ ((destructor)) intern__fre__lib_finit(void)
 
 void intern__fre__key_delete(void *key)
 {
-  fre_pmatch *to_free = NULL;
-  
-  //  if ((to_free = pmatch_table )!= NULL)
-  //    intern__fre__free_ptable(to_free);
   if (key != NULL)
     free(key);
   key = NULL;
@@ -77,7 +73,7 @@ void intern__fre__key_delete(void *key)
 
 /*
  * A pmatch_table is a structure containing possible 
- * positions of sub-matches within the string argument of fre_bind().
+ * positions of matches and sub-matches within the string argument of fre_bind().
  * Pmatch_tables are thread-specific and their content gets
  * overwritten everytime a user's thread(s) calls fre_bind().
 
@@ -126,11 +122,40 @@ fre_pmatch* intern__fre__pmatch_location(fre_pmatch *new_head)
 
 static inline fre_pmatch* intern__fre__fetch_head(void)
 {
-  if (fre_headnode_table->head_list_tos == 0){
-    errno = 0;
-    intern__fre__errmesg("Too many requests");
-    return NULL;
+  size_t new_size = 0, i = 0;
+  fre_pmatch **new_head_list = NULL;
+
+  /* Extend the list when we're out of tables. */
+  if (fre_headnode_table->head_list_tos == fre_headnode_table->sizeof_table - 1){
+    new_size = fre_headnode_table->sizeof_table * 2;
+    if ((new_head_list = realloc(fre_headnode_table->head_list, new_size * sizeof(fre_pmatch*))) == NULL){
+      intern__fre__errmesg("Realloc");
+      return NULL;
+    }
+    for(i = fre_headnode_table->sizeof_table;
+	i < new_size;
+	i++) {
+      if ((new_head_list[i] = intern__fre__init_ptable(FRE_MAX_SUB_MATCHES)) == NULL){
+	intern__fre__errmesg("Intern__fre__init_ptable");
+	goto errjmp;
+      }
+    }
+    fre_headnode_table->head_list = new_head_list;
+    fre_headnode_table->sizeof_table = new_size;
   }
-  return fre_headnode_table->head_list[fre_headnode_table->head_list_tos--];
+  return fre_headnode_table->head_list[fre_headnode_table->head_list_tos++];
+
+ errjmp:
+  if (new_head_list){
+    for (i = 0; i < new_size; i++){
+      if (new_head_list[i]){
+	free(new_head_list[i]);
+	new_head_list[i] = NULL;
+      }
+    }
+    free(new_head_list);
+    new_head_list = NULL;
+  }
+  return NULL;
 }
 

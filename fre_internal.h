@@ -133,7 +133,7 @@ typedef struct fpattern {
 # define FRE_EXPECTED_M_OP_DELIMITER   2       /* Number of expected delimiters for a match op pattern. */
 # define FRE_EXPECTED_ST_OP_DELIMITER  3       /* Number of expected delimiters for subs. and trans. op patterns. */
 # define FRE_MAX_SUB_MATCHES           100     /* Maximum number of submatches. */
-# define FRE_HEADNODE_TABLE_SIZE       64      /* Arbitrary. Default number of pmatch_table in headnode_table. */
+# define FRE_HEADNODE_TABLE_SIZE       4       /* Arbitrary. Default number of pmatch_tables in the headnode_table. */
 
 /* Must be INT_MAX to safely fetch sub-match(es) position(s). */
 # define FRE_ARG_STRING_MAX_LENGHT     INT_MAX /* Maximum lenght of fre_bind()'s string argument, '\0' included. */

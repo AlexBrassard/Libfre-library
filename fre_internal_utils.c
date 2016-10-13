@@ -97,7 +97,7 @@ fre_headnodes* intern__fre__init_head_table(void)
 
   headnode_table->sizeof_table = FRE_HEADNODE_TABLE_SIZE;
   /* -1: Must be set to the first free available node. */
-  headnode_table->head_list_tos = (FRE_HEADNODE_TABLE_SIZE - 1);
+  headnode_table->head_list_tos = 0;
   
   return headnode_table; /* Success ! */
 

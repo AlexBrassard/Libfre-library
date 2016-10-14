@@ -76,24 +76,40 @@ void intern__fre__key_delete(void *key)
  * positions of matches and sub-matches within the string argument of fre_bind().
  * Pmatch_tables are thread-specific and their content gets
  * overwritten everytime a user's thread(s) calls fre_bind().
+
+ * When a non-NULL argument has been passed, set the thread specific 
+ * pointer to point to that value and return it.
  */
-fre_pmatch* intern__fre__pmatch_location(void)
+fre_pmatch* intern__fre__pmatch_location(fre_pmatch *new_head)
 {
   size_t i = 0;
   fre_pmatch *table = NULL;
-  /* If there's an existing table, fetch and return it. */
-  if ((table = pthread_getspecific(pmatch_table_key)) != NULL){
-    return table;
+  if (new_head == NULL){
+    /* If there's an existing table, fetch and return it. */
+    if ((table = pthread_getspecific(pmatch_table_key)) != NULL){
+      return table;
+    }
+    else {
+      pthread_mutex_lock(fre_headnode_table->table_lock);
+      if ((table = intern__fre__fetch_head()) == NULL){
+	intern__fre__errmesg("Intern__fre__fetch_head");
+	return NULL;
+      }
+      pthread_mutex_unlock(fre_headnode_table->table_lock);
+      if (pthread_setspecific(pmatch_table_key, table) != 0){
+	intern__fre__errmesg("Pthread_setspecific");
+	return NULL;
+      }
+      if ((table = pthread_getspecific(pmatch_table_key)) == NULL){
+	intern__fre__errmesg("Pthread_getspecific");
+	return NULL;
+      }
+      return table;
+    }
   }
   else {
-    pthread_mutex_lock(fre_headnode_table->table_lock);
-    if ((table = intern__fre__fetch_head()) == NULL){
-      intern__fre__errmesg("Intern__fre__fetch_head");
-      return NULL;
-    }
-    pthread_mutex_unlock(fre_headnode_table->table_lock);
-    if (pthread_setspecific(pmatch_table_key, table) != 0){
-      intern__fre__errmesg("Pthread_setspecific");
+    if (pthread_setspecific(pmatch_table_key, new_head) != 0){
+      intern__fre__errmesg("Pthread_set_specific");
       return NULL;
     }
     if ((table = pthread_getspecific(pmatch_table_key)) == NULL){
@@ -102,16 +118,8 @@ fre_pmatch* intern__fre__pmatch_location(void)
     }
     return table;
   }
-  
-  
 } /* intern__fre__pmatch_location() */
 
-
-/* 
- * Warning: The headnode_list's mutex MUST be locked before
- *          making a call to this function AND unlocked
- *          after the function returned. 
- */
 static inline fre_pmatch* intern__fre__fetch_head(void)
 {
   size_t new_size = 0, i = 0;
@@ -127,8 +135,8 @@ static inline fre_pmatch* intern__fre__fetch_head(void)
     for(i = fre_headnode_table->sizeof_table;
 	i < new_size;
 	i++) {
-      if ((new_head_list[i] = intern__fre__init_pmatch_table()) == NULL){
-	intern__fre__errmesg("Intern__fre__init_pmatch_table");
+      if ((new_head_list[i] = intern__fre__init_ptable(FRE_MAX_SUB_MATCHES)) == NULL){
+	intern__fre__errmesg("Intern__fre__init_ptable");
 	goto errjmp;
       }
     }

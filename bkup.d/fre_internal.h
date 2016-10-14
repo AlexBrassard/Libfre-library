@@ -54,7 +54,6 @@ typedef struct fre_brefs {
 
 } fre_backref;
 
-
 /* Flag to indicate a fre_pattern's operation. */
 typedef enum foperation {
   NONE = -1,
@@ -64,69 +63,66 @@ typedef enum foperation {
 
 } fre_op_f;
 
-
 /* Structure of a fre_pattern. */
 typedef struct fpattern {
   /* Pattern modifiers */
-  bool                  fre_mod_boleol;         /* True when the '/m' modifier is activated. */
-  bool                  fre_mod_newline;        /* True when the '/s' modifier is activated. */
-  bool                  fre_mod_icase;          /* True when the '/i' modifier is activated. */
-  bool                  fre_mod_ext;            /* True when the '/x' modifier is activated. */
-  bool                  fre_mod_global;         /* True when the '/g' modifier is activated. */
+  bool     fre_mod_boleol;                     /* True when the '/m' modifier is activated. */
+  bool     fre_mod_newline;                    /* True when the '/s' modifier is activated. */
+  bool     fre_mod_icase;                      /* True when the '/i' modifier is activated. */
+  bool     fre_mod_ext;                        /* True when the '/x' modifier is activated. */
+  bool     fre_mod_global;                     /* True when the '/g' modifier is activated. */
 
   /* Indicate whether or not to regfree() the pattern. */
-  bool                  fre_p1_compiled;        /* True when stripped_pattern[0] has been regcomp()'d. */
+  bool     fre_p1_compiled;                    /* True when stripped_pattern[0] has been regcomp()'d. */
 
   /* Pattern's delimiter(s) */
-  bool                  fre_paired_delimiters;  /* True when delimiter is one of  { ( [ <  */
-  char                  delimiter;              /* The delimiter used in the pattern. */
-  char                  c_delimiter;            /* Closing delimiter, when using paired-type delimiters. */
+  bool     fre_paired_delimiters;              /* True when delimiter is one of  { ( [ <  */
+  char     delimiter;                          /* The delimiter used in the pattern. */
+  char     c_delimiter;                        /* Closing delimiter, when using paired-type delimiters. */
 
   /* Operation related flags */
-  fre_op_f              fre_op_flag;            /* Indicate the pattern's type of operation. */
+  fre_op_f fre_op_flag;                        /* Indicate the pattern's type of operation. */
 
   /* Back-reference related */
-  bool                  fre_match_op_bref;      /* True when back-reference(s) are found in a matching pattern. */
-  bool                  fre_subs_op_bref;       /* True when back-reference(s) are found in the substitute pattern. */
-  fre_backref           *backref_pos;           /* Contains positions of back-references, when fre_op_bref is true. */
+  bool     fre_match_op_bref;                  /* True when back-reference(s) are found in a matching pattern. */
+  bool     fre_subs_op_bref;                   /* True when back-reference(s) are found in the substitute pattern. */
+  fre_backref *backref_pos;                    /* Contains positions of back-references, when fre_op_bref is true. */
   
   /* Pointer to the operation to be executed, determined by the fre_op_flag. */
-  int      (*operation)(struct fpattern*, char*); /* mostly obsolete <---------- */
+  int      (*operation)(struct fpattern*, char*);
 
   /* Patterns */
-  regex_t               *comp_pattern;         /* The compiled regex pattern. */
-  char                  **striped_pattern;     /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
-  char                  **saved_pattern;       /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
+  regex_t  *comp_pattern;                      /* The compiled regex pattern. */
+  char     **striped_pattern;                  /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
+  char     **saved_pattern;                    /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
 
 } fre_pattern;
 
-
 /* Per-thread global sub-match table kept between invocations of fre_bind(). */
 typedef struct fre_pmatch_tab {
-  bool                  fre_saved_object;      /* True when an fre_pattern* has been saved in ->ls_object. */
-  int                   lastop_retval;         /* To keep return value of a successful match_op in global operations. */
-  char                  *ls_pattern;           /* Last seen pattern, as given by the caller of fre_bind(). */
-  fre_pattern           *ls_object;            /* Last seen freg_object, as returned by the _plp_parser(). */
-  fre_smatch            **whole_match;         /* Begining/ending positions of every successful matches. */
-  fre_smatch            **sub_match;           /* Begining/ending positions of every parenthesed expressions. */
-  size_t                wm_ind;                /* First free position of whole-match array. */
-  size_t                sm_ind;                /* First free position of sub-matches array. */
-  size_t                wm_size;               /* Size of whole-match array. */
-  size_t                sm_size;               /* Size of sub-match array. */
+  bool                  fre_mod_global;   /* True when /g is activated, pmatch_table will contain extra nodes. */
+  bool                  fre_saved_object; /* True when an fre_pattern has been saved in ->ls_object. */
+  int                   lastop_retval;    /* Value of the last operation. */
+  char                  *ls_pattern;      /* Last pattern seen by the _plp_parser(). */
+  fre_pattern           *ls_object;       /* Last fre_pattern* returned by the _plp_parser(). */
+  struct fre_pmatch_tab *next_match;      /* Pointer to the node containing positions of the next match. */
+  struct fre_pmatch_tab *headnode;        /* Pointer to the pmatch_table's head_node, for easy access. */
+  /* Determined by the values in regmatch_t[]. */
+  fre_smatch            *whole_match;     /* Begining/ending of the complete match operation in the matched string. */
+  fre_smatch            **sub_match;      /* Array of sub-match offsets. */
   
 } fre_pmatch;
-
 
 /* 
  * Global table containing pointers to headnodes of all created 
  * pmatch-tables to allow _lib_finit to free them.
  */
 typedef struct fre_head_tab {
-  size_t                numof_tables;          /*obsolete Number of nodes in the array. */
-  size_t                sizeof_table;          /* The size of the array. */
-  size_t                head_list_tos;         /* The headnode list's first available element. */
-  pthread_mutex_t       *table_lock;           /* To serialize access to the table. */
-  fre_pmatch            **head_list;           /* Array of pointers to pmatch_table headnodes. */
+  size_t                numof_tables;     /*obsolete Number of nodes in the array. */
+  size_t                sizeof_table;     /* The size of the array. */
+  size_t                head_list_tos;    /* The headnode list's first available element. */
+  pthread_mutex_t       *table_lock;      /* To serialize access to the table. */
+  fre_pmatch            **head_list;      /* Array of pointers to pmatch_table headnodes. */
 
 
 } fre_headnodes;
@@ -139,8 +135,7 @@ typedef struct fre_head_tab {
 # define FRE_MAX_PATTERN_LENGHT        256     /* 256 to keep our POSIX conformance. */
 # define FRE_EXPECTED_M_OP_DELIMITER   2       /* Number of expected delimiters for a match op pattern. */
 # define FRE_EXPECTED_ST_OP_DELIMITER  3       /* Number of expected delimiters for subs. and trans. op patterns. */
-# define FRE_MAX_MATCHES               128     /* Default maximum number of matches. */
-# define FRE_MAX_SUB_MATCHES           32      /* Default maximum number of submatches. */
+# define FRE_MAX_SUB_MATCHES           100     /* Maximum number of submatches. */
 # define FRE_HEADNODE_TABLE_SIZE       4       /* Arbitrary. Default number of pmatch_tables in the headnode_table. */
 
 /* Must be INT_MAX to safely fetch sub-match(es) position(s). */
@@ -191,15 +186,17 @@ fre_backref*   intern__fre__init_bref_arr(void);                     /* Allocate
 void           intern__fre__free_bref_arr(fre_backref *to_free);     /* Free resources of a fre_backref *. */
 /* There's no _free_smatch(), _free_pmatch_node handles this. */
 fre_smatch*    intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
-fre_pmatch*    intern__fre__init_pmatch_table(void);
-void           intern__fre__free_pmatch_table(fre_pmatch *node);
+fre_pmatch*    intern__fre__init_pmatch_node(void);                  /* Allocate memory to a single node of the pmatch_table. */
+void           intern__fre__free_pmatch_node(fre_pmatch *node);      /* Free resources of a single node of the pmatch_table. */
+fre_pmatch*    intern__fre__init_ptable(size_t numof_nodes);         /* Initialize a complete pmatch linked-list. */
+void           intern__fre__free_ptable(fre_pmatch *headnode);       /* Free the whole headnode pmatch linked-list. */
 fre_pattern*   intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
 void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
 fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */
 void           intern__fre__free_head_table(void);                   /* Release resources of the global headnode_table. */
 int            intern__fre__push_head(fre_pmatch* head);             /* Add the given headnode to the global headnode_table. */
 void           intern__fre__key_delete(void *key);                   /* To feed pthread_key_create() . */
-fre_pmatch*    intern__fre__pmatch_location(void);                   /* To access a thread's pmatch-table. */
+fre_pmatch*    intern__fre__pmatch_location(fre_pmatch* new_head);   /* To access a thread's pmatch-table. */
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
 
 int            intern__fre__compile_pattern(fre_pattern *freg_object);/* Compile the modified pattern. */
@@ -258,7 +255,7 @@ int          intern__fre__transliterate_op(char *string,           /* Execute a 
 					   fre_pattern *freg_object);
 
 /* Thread specific pmatch-table. */
-#define fre_pmatch_table (intern__fre__pmatch_location())
+#define fre_pmatch_table (intern__fre__pmatch_location(NULL))
 
 
 #endif /* FRE_INTERNAL_HEADER */

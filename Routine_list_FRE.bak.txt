@@ -9,7 +9,8 @@ P---  Pseudo-coded.
 --M-  Is a MACRO.
 ---O  Is obsolete but kept for some reasons.
 ----I Static Inline function.
-PCMO	      function_name	   file(abreviation) Description
+
+PCMOI	      function_name	   file(abreviation) Description
 
 /** Intern API **/
 -C--	      SU_strcpy			     utils.c Safetly copy a string to another.
@@ -18,10 +19,8 @@ PC-- 	      intern__fre__init_pattern      utils.c Allocate memory for a fre_pat
 -C--	      intern__fre__init_bref_arr     utils.c Allocate memory for a fre_backref* object.
 -C--	      intern__fre__free_bref_arr     utils.c Deallocate memory for a fre_backref* object.
 PC--	      intern__fre__init_smatch	     utils.c Allocate memory for a fre_smatch* object.
-PC--	      intern__fre__init_pmatch_node  utils.c Allocate memory for a single node of type fre_pmatch*.
-PC--	      intern__fre__free_pmatch_node  utils.c Deallocate memory for a single node of type fre_pmatch*.
--C--	      intern__fre__init_ptable	     utils.c Allocate memory for a complete pmatch_table linked-list.
-PC--	      intern__fre__free_ptable       utils.c Deallocate memory for each nodes of the global pmatch_table.
+-C--	      intern__fre__init_pmatch_table utils.c Allocate memory for a single table of type fre_pmatch*.
+-C--	      intern__fre__free_pmatch_table utils.c Deallocate memory for a single table of type fre_pmatch*.
 -C--	      intern__fre__init_head_table   utils.c Initialize the global headnode table.
 -C--	      intern__fre__free_head_table   utils.c Release resources of the global headnode table itself.
 
@@ -31,12 +30,12 @@ PCM-	      FRE_CERTIFY_ESC_SEQ            utils.c Verify escape sequences, repla
 PCM-	      FRE_FETCH_MODIFIERS            utils.c Fetches and validate modifiers.
 PCM-	      FRE_HANDLE_BREF                utils.c Registers the position within a pattern of a back-reference.
 PC--	      intern__fre__insert_sm	     utils.c Insert a sub-match inside a pattern.
-P---	      intern__fre__cut_match	     utils.c Cut a matched sequence of chars from the matched string.
+PC--	      intern__fre__cut_match	     utils.c Cut a matched sequence of chars from the matched string.
 PC--	      intern__fre__strip_pattern     utils.c Strip off a pattern from its Perl-like elements.
 -C--	      intern__fre__compile_pattern   utils.c Compile the converted Perl-like pattern.
 PC--	      intern__fre__perl_to_posix     utils.c Convert a stripped-off, perl-like pattern into a POSIX conformant pattern.
 
--C--I	      intern__fre__fetch_head	     init.c  Used by threads to fetch their linked-list's headnode.
+-C-I	      intern__fre__fetch_head	     init.c  Used by threads to fetch their linked-list's headnode.
 PC--	      intern__fre__pmatch_location   init.c  Returns the address of a per-thread pmatch_table.
 PC--	      intern__fre__lib_init	     init.c  Initializes the library (mostly for pmatch_table).
 PC--	      intern__fre__lib_finit	     init.c  Terminate the library (mostly for pmatch_table).
@@ -59,7 +58,7 @@ PC--	      intern__fre__transliterate_op  main.c  Execute a transliteration oper
 
 
 /** Public API **/
-----	      fre_bind			             Binds pattern to string and execute pattern's operation. 
+PC--	      fre_bind			             Binds pattern to string and execute pattern's operation. 
 
 
 *********
@@ -72,6 +71,8 @@ P--O**	      intern__fre__free_smatch	     utils.c Deallocate memory for a fre_s
 -C-O	      intern__fre__push_head	     utils.c Save the address of the calling pmatch_table in headnode_table.
 -C-O	      intern__fre__clean_head_table  utils.c Free all pmatch_tables whos headnode is in headnode_table.
 P--O	      intern__fre__set_headnode	     init.c  Called by pthread once
+-C-O	      intern__fre__init_ptable	     utils.c Allocate memory for a complete pmatch_table linked-list.
+PC-O	      intern__fre__free_ptable       utils.c Deallocate memory for each nodes of the global pmatch_table.
 
 * Will most likely be obsolete, as implementations must provide regmatch filled with good numbers.
 

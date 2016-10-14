@@ -87,10 +87,10 @@ fre_headnodes* intern__fre__init_head_table(void)
     intern__fre__errmesg("Malloc");
     goto errjmp;
   }
-  /* For each element of the array, init a pmatch_table. */
+  /* For each element of the array, init a pmatch_table linked-list. */
   for (i = 0; i < FRE_HEADNODE_TABLE_SIZE; i++){
-    if ((headnode_table->head_list[i] = intern__fre__init_pmatch_table()) == NULL){
-      intern__fre__errmesg("Intern__fre__init_pmatch_table");
+    if ((headnode_table->head_list[i] = intern__fre__init_ptable(FRE_MAX_SUB_MATCHES)) == NULL){
+      intern__fre__errmesg("Intern__fre__init_ptable");
       goto errjmp;
     }
   }
@@ -110,7 +110,7 @@ fre_headnodes* intern__fre__init_head_table(void)
     if (headnode_table->head_list != NULL){
       for (i = 0; i < FRE_HEADNODE_TABLE_SIZE; i++){
 	if (headnode_table->head_list[i] != NULL){
-	  intern__fre__free_pmatch_table(headnode_table->head_list[i]);
+	  intern__fre__free_ptable(headnode_table->head_list[i]);
 	}
       }
       free(headnode_table->head_list);
@@ -132,7 +132,7 @@ void intern__fre__free_head_table(void)//fre_headnodes *headnode_table)
   if (fre_headnode_table->head_list != NULL){
     for (i = 0; i < fre_headnode_table->sizeof_table; i++){
       if (fre_headnode_table->head_list[i] != NULL){
-	intern__fre__free_pmatch_table(fre_headnode_table->head_list[i]);
+	intern__fre__free_ptable(fre_headnode_table->head_list[i]);
 	fre_headnode_table->head_list[i] = NULL;
       }
     }
@@ -264,11 +264,14 @@ fre_smatch* intern__fre__init_smatch(void)
 
 
 /* 
- * Allocate memory for a single pmatch_table,
- * a per-thread table of [sub]matches positions kept 
- * between each invocation of fre_bind.
+ * Allocate memory to a single node of a pattern's
+ * pmatch_table, a "per pattern" linked-list returned by
+ * each call to fre_bind(). This table holds match and sub-match(es)'
+ * position(s), or -1(s) if pattern didn't match.
+ * Libfre user(s) must free this table themself.
+ * Each time a user calls on fre_bind(), a fre_pmatch linked-list is being returned.
  */
-fre_pmatch* intern__fre__init_pmatch_table(void)
+fre_pmatch* intern__fre__init_pmatch_node(void)
 {
   size_t i = 0;
   fre_pmatch *to_init = NULL;
@@ -281,15 +284,13 @@ fre_pmatch* intern__fre__init_pmatch_table(void)
     intern__fre__errmesg("Calloc");
     goto errjmp;
   }
-  if ((to_init->whole_match = malloc(FRE_MAX_MATCHES * sizeof(fre_smatch*))) == NULL){
+  /*  if ((to_init->ls_object = malloc(sizeof(fre_pattern*))) == NULL){
     intern__fre__errmesg("Malloc");
     goto errjmp;
-  }
-  for (i = 0; i < FRE_MAX_MATCHES; i++){
-    if ((to_init->whole_match[i] = intern__fre__init_smatch()) == NULL){
-      intern__fre__errmesg("Intern__fre__init_smatch");
-      goto errjmp;
-    }
+    }*/
+  if ((to_init->whole_match = intern__fre__init_smatch()) == NULL){
+    intern__fre__errmesg("Intern__fre__init_smatch");
+    goto errjmp;
   }
   if ((to_init->sub_match = malloc(FRE_MAX_SUB_MATCHES * sizeof(fre_smatch*))) == NULL){
     intern__fre__errmesg("Malloc");
@@ -301,12 +302,11 @@ fre_pmatch* intern__fre__init_pmatch_table(void)
       goto errjmp;
     }
   }
-  to_init->lastop_retval = 0;
+  to_init->fre_mod_global = false;
   to_init->fre_saved_object = false;
-  to_init->wm_ind = 0;
-  to_init->sm_ind = 0;
-  to_init->wm_size = FRE_MAX_MATCHES;
-  to_init->sm_size = FRE_MAX_SUB_MATCHES;
+  to_init->next_match = NULL;
+  to_init->headnode = NULL;
+  to_init->lastop_retval = 0;
 
   return to_init; /* Success! */
 
@@ -316,13 +316,11 @@ fre_pmatch* intern__fre__init_pmatch_table(void)
       free(to_init->ls_pattern);
       to_init->ls_pattern = NULL;
     }
+    /*    if (to_init->ls_object){
+      free(to_init->ls_object);
+      to_init->ls_object = NULL;
+      }*/
     if (to_init->whole_match != NULL){
-      for (i = 0; i < FRE_MAX_MATCHES; i++){
-	if (to_init->whole_match[i] != NULL){
-	  free(to_init->whole_match[i]);
-	  to_init->whole_match[i] = NULL;
-	}
-      }      
       free(to_init->whole_match);
       to_init->whole_match = NULL;
     }
@@ -336,24 +334,56 @@ fre_pmatch* intern__fre__init_pmatch_table(void)
       free(to_init->sub_match);
       to_init->sub_match = NULL;
     }
-    to_init->ls_object = NULL;
+    to_init->next_match = NULL;
+    to_init->headnode = NULL;
     free(to_init);
     to_init = NULL;
   }
 
   return NULL; /* Failure. */
-} /* intern__fre__init_pmatch_table() */
+} /* intern__fre__init_pmatch_node() */
 
 
-/* Release memory of a single pmatch_table. */
-void intern__fre__free_pmatch_table(fre_pmatch *to_free)
+/* Init all nodes of a pmatch_table linked-list. */
+fre_pmatch* intern__fre__init_ptable(size_t numof_nodes)
+{
+  size_t i = 0;
+  fre_pmatch *head = NULL;
+  
+  
+  if (numof_nodes == 0){
+    abort();
+  }
+  if ((head = intern__fre__init_pmatch_node()) == NULL){
+    intern__fre__errmesg("Intern__fre__init_pmatch_node");
+    abort();
+  }
+  head->headnode = head;
+
+  while (i < numof_nodes){
+    if ((head->next_match = intern__fre__init_pmatch_node()) == NULL){
+      intern__fre__errmesg("Intern__fre__init_pmatch_node");
+      abort();
+    }
+    head->next_match->headnode = head->headnode;
+    head = head->next_match;
+    ++i;
+  }
+  head = head->headnode;
+
+  return head;
+}
+  
+
+/* Release a single node of a pattern's pmatch_table. */
+void intern__fre__free_pmatch_node(fre_pmatch *to_free)
 {
   size_t i = 0;
   /*  If we're being passed a NULL argument, return now. */
   if (to_free != NULL){
     
     if (to_free->sub_match != NULL){
-      for (i = 0; i < to_free->sm_size; i++){
+      for (i = 0; i < FRE_MAX_SUB_MATCHES; i++){
 	if (to_free->sub_match[i] != NULL){
 	  free(to_free->sub_match[i]);
 	  to_free->sub_match[i] = NULL;
@@ -363,12 +393,6 @@ void intern__fre__free_pmatch_table(fre_pmatch *to_free)
       to_free->sub_match = NULL;
     }
     if (to_free->whole_match != NULL){
-      for (i = 0; i < to_free->wm_size; i++){
-	if (to_free->whole_match[i] != NULL){
-	  free(to_free->whole_match[i]);
-	  to_free->whole_match[i] = NULL;
-	}
-      }
       free(to_free->whole_match);
       to_free->whole_match = NULL;
     }
@@ -376,15 +400,34 @@ void intern__fre__free_pmatch_table(fre_pmatch *to_free)
       free(to_free->ls_pattern);
       to_free->ls_pattern = NULL;
     }
+    /*    if (to_free->ls_object != NULL){
+      free(to_free->ls_object);
+      to_free->ls_object = NULL;
+      }*/
     to_free->ls_object = NULL;
-
+    to_free->next_match = NULL;
+    to_free->headnode = NULL;
     free(to_free);
   }
-
   return;
   
-} /* intern__fre__free_pmatch_table() */
 
+} /* intern__fre__free_pmatch_node() */
+
+
+/* Free a complete pmatch_table. */
+void intern__fre__free_ptable(fre_pmatch *pheadnode)
+{
+  fre_pmatch *temp;
+  pheadnode = pheadnode->headnode;
+  while (pheadnode != NULL){
+    temp = pheadnode;
+    pheadnode = pheadnode->next_match;
+    intern__fre__free_pmatch_node(temp);
+  }
+  return;
+
+} /* intern__fre__free_ptable() */
 
 
 /* 

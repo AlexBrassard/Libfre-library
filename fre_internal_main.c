@@ -160,8 +160,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
   fre_smatch **temp = NULL;
 
 
-  if (string == NULL
-      || freg_object == NULL){
+  if (!string || !freg_object){
     errno = EINVAL;
     return FRE_ERROR;
   }
@@ -306,7 +305,7 @@ int intern__fre__substitute_op(char *string,
   char *string_copy = NULL;
   size_t new_string_lenght = 0;
   size_t numof_tokens_skiped = 0;
-  size_t j = 0, ns_ind = 0, sp_ind = 0;
+  size_t ns_ind = 0, sp_ind = 0;
 
   
   if (string == NULL
@@ -475,7 +474,6 @@ int intern__fre__transliterate_op(char *string,
 {
 
   size_t i = 0, j = 0, token_ind = 0;
-  size_t mp_count = 0, sp_count = 0; /* Matching/substitute pattern counters. */
   size_t sp_ind = 0;
   char **new_striped_p = NULL;
   char *new_string = NULL;
@@ -600,8 +598,7 @@ int intern__fre__transliterate_op(char *string,
 
 void print_ptable_hook(void)
 {
-  size_t i = 0, j = 0, n = 0;
-  size_t node_num = 0;
+  size_t i = 0, n = 0;
   pthread_mutex_lock(&fre_stderr_mutex);
   fprintf(stderr, "fre_saved_object: %s\n", ((fre_pmatch_table->fre_saved_object == true) ? "true" : "false"));
   fprintf(stderr, "lastop_retval: %d\n", fre_pmatch_table->lastop_retval);
@@ -620,7 +617,7 @@ void print_ptable_hook(void)
   fprintf(stderr, "\nSub_match positions:\n");
   i = 0; n = 0;
   while (i < fre_pmatch_table->sm_size && fre_pmatch_table->sub_match[i]->bo != -1){
-    if (n++ == 3){
+    if (n++ == 2){
       fprintf(stderr, "\n");
       n = 0;
     }

@@ -20,7 +20,6 @@ pthread_mutex_t fre_stderr_mutex;  /* For when error/debug messages has multiple
 pthread_key_t pmatch_table_key;    /* Keys to the pmatch_table kindom. */
 fre_headnodes *fre_headnode_table; /* To keep track of allocated pmatch_tables. */
 
-#define pmatch_table (intern__fre__pmatch_location())
 
 int __attribute__ ((constructor)) intern__fre__lib_init(void)
 {
@@ -34,7 +33,7 @@ int __attribute__ ((constructor)) intern__fre__lib_init(void)
     perror("Pthread_key_create");
     return FRE_ERROR;
   }
-  /* Initialize the global table of headnode pointers. */
+  /* Initialize the global table of allocated pmatch_tables. */
   if ((fre_headnode_table = intern__fre__init_head_table()) == NULL){
     perror("intern__fre__init_head_table");
     return FRE_ERROR;
@@ -45,50 +44,50 @@ int __attribute__ ((constructor)) intern__fre__lib_init(void)
 
 void __attribute__ ((destructor)) intern__fre__lib_finit(void)
 {
-  fre_pmatch *to_free = NULL;
-  size_t i = 0;
-  /* Deallocate stderr's mutex. */
+
   if (pthread_mutex_destroy(&fre_stderr_mutex) != 0){
     /* Say what failed but still try to free what's left. */
     perror("Pthread_mutex_destroy");
   }
 
-  /* Free the global headnode table itself. */
-  intern__fre__free_head_table();//fre_headnode_table);
+  intern__fre__free_head_table();
 
   if (pthread_key_delete(pmatch_table_key) != 0){
     perror("Pthread_key_delete");
   }
 
-  
-} /* intern__fre__pmatch_location() */
+} /* intern__fre__lib_finit() */
 
 
+/* Because pthread_key_create needs a way to free the allocated key. */
 void intern__fre__key_delete(void *key)
 {
   if (key != NULL)
     free(key);
-  key = NULL;
 }
 
 /*
+ * Do not use this function directly, instead use the
+ * fre_pmatch_table MACRO defined near the bottom of fre_internal.h .
+
  * A pmatch_table is a structure containing possible 
  * positions of matches and sub-matches within the string argument of fre_bind().
  * Pmatch_tables are thread-specific and their content gets
- * overwritten everytime a user's thread(s) calls fre_bind().
+ * overwritten everytime a user's thread(s) calls _match_op().
  */
 fre_pmatch* intern__fre__pmatch_location(void)
 {
-  size_t i = 0;
   fre_pmatch *table = NULL;
   /* If there's an existing table, fetch and return it. */
   if ((table = pthread_getspecific(pmatch_table_key)) != NULL){
     return table;
   }
+  /* Else get one from the global headnode_table. */
   else {
     pthread_mutex_lock(fre_headnode_table->table_lock);
     if ((table = intern__fre__fetch_head()) == NULL){
       intern__fre__errmesg("Intern__fre__fetch_head");
+      pthread_mutex_unlock(fre_headnode_table->table_lock);
       return NULL;
     }
     pthread_mutex_unlock(fre_headnode_table->table_lock);
@@ -102,7 +101,6 @@ fre_pmatch* intern__fre__pmatch_location(void)
     }
     return table;
   }
-  
   
 } /* intern__fre__pmatch_location() */
 
@@ -139,7 +137,7 @@ static inline fre_pmatch* intern__fre__fetch_head(void)
 
  errjmp:
   if (new_head_list){
-    for (i = 0; i < new_size; i++){
+    for (i = fre_headnode_table->sizeof_table; i < new_size; i++){
       if (new_head_list[i]){
 	free(new_head_list[i]);
 	new_head_list[i] = NULL;

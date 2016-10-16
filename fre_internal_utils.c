@@ -13,7 +13,7 @@
 #include <regex.h>
 #include <string.h>
 #include <ctype.h>
-#include <stdint.h>   /* SIZE_MAX */
+#include <stdint.h>
 #include <errno.h>
 
 #include "fre_internal.h"
@@ -28,7 +28,6 @@ extern fre_headnodes *fre_headnode_table;
 void *SU_strcpy(char *dest, char *src, size_t n)
 {
   size_t src_s = 0;
-  
   
   if (dest != NULL                /* We need an already initialized buffer. */
       && src != NULL              /* We need a valid, non-empty source. */
@@ -61,12 +60,12 @@ void *SU_strcpy(char *dest, char *src, size_t n)
 
 /* 
  * Allocate memory for the global headnode_table that
- * contains pointers to all TSD linked-lists created since 
+ * contains pointers to all pmatch-tables created since 
  * _lib_init. This to allow _lib_finit to free all used memory.
  */
 fre_headnodes* intern__fre__init_head_table(void)
 {
-  size_t i = 0,c = 0 ;
+  size_t i = 0;
   fre_headnodes *headnode_table = NULL;
 
   if ((headnode_table = malloc(sizeof(fre_headnodes))) == NULL){
@@ -87,7 +86,6 @@ fre_headnodes* intern__fre__init_head_table(void)
     intern__fre__errmesg("Malloc");
     goto errjmp;
   }
-  /* For each element of the array, init a pmatch_table. */
   for (i = 0; i < FRE_HEADNODE_TABLE_SIZE; i++){
     if ((headnode_table->head_list[i] = intern__fre__init_pmatch_table()) == NULL){
       intern__fre__errmesg("Intern__fre__init_pmatch_table");
@@ -96,7 +94,6 @@ fre_headnodes* intern__fre__init_head_table(void)
   }
 
   headnode_table->sizeof_table = FRE_HEADNODE_TABLE_SIZE;
-  /* -1: Must be set to the first free available node. */
   headnode_table->head_list_tos = 0;
   
   return headnode_table; /* Success ! */
@@ -123,7 +120,7 @@ fre_headnodes* intern__fre__init_head_table(void)
 
 
 /* Release resources of the global headnode_table. */
-void intern__fre__free_head_table(void)//fre_headnodes *headnode_table)
+void intern__fre__free_head_table(void)
 {
   size_t i = 0;
   /* Return right away if we're passed a NULL argument. */
@@ -218,7 +215,7 @@ fre_backref* intern__fre__init_bref_arr(void)
 void intern__fre__free_bref_arr(fre_backref *to_free)
 {
   /* Return right away if we're being passed a NULL argument. */
-  if (to_free == NULL){
+  if (!to_free){
     return;
   }
   if (to_free->in_pattern != NULL){
@@ -238,16 +235,16 @@ void intern__fre__free_bref_arr(fre_backref *to_free)
     to_free->s_sm_number = NULL;
   }
   free(to_free);
-  to_free = NULL;
+  /*  to_free = NULL;*/
   return;
 } /* intern__fre__free_bref_arr() */
 
 
 /* 
  * Allocate memory to a fre_smatch structure, 
- * used to register sub-match(es) position(s) inside a matching string.
+ * used to register [sub]matches positions inside a matching string.
  * There's no deallocation function, free is being called by
- * intern__fre__free_pmatch_node().
+ * intern__fre__free_pmatch_table().
  */
 fre_smatch* intern__fre__init_smatch(void)
 {
@@ -669,9 +666,6 @@ int intern__fre__strip_pattern(char *pattern,
 			       fre_pattern *freg_object,
 			       size_t token_ind)
 {
-int    bref_num = 0;                    
- char   bref_num_string[FRE_MAX_SUB_MATCHES]; /* Used by atoi() to convert encountered bref numbers into integers. */
-  size_t i = 0;
   size_t spa_tos = 0;                          /* ->striped_pattern[0|1]'s tos values. */
   size_t spa_ind = 0;                          /* 0: matching pattern ind; 1: substitute pattern ind. */
   size_t delimiter_pairs_c = 1;                /* Count of pairs of paired-delimiter seen.*/
@@ -680,7 +674,6 @@ int    bref_num = 0;
 						* following the first delimiter. 
 						*/
   size_t numof_seen_tokens = 0;                /* To help registering positions of back-references. */
-  size_t pattern_len = strnlen(pattern,FRE_MAX_PATTERN_LENGHT); /* The pattern's lenght. */
   
 #define FRE_TOKEN pattern[token_ind]
 
@@ -737,7 +730,6 @@ int    bref_num = 0;
        */
       if (delimiter_pairs_c <= 0) {
 	if (freg_object->fre_op_flag == MATCH){
-	  /* NULL terminate the stripped off pattern. */
 	  FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
 	  break;
@@ -774,9 +766,8 @@ int    bref_num = 0;
 	}
 	/* Found the end of a pair of delimiters. */
 	else if (FRE_TOKEN == freg_object->c_delimiter){
-	  --delimiter_pairs_c;
 	  /* Push it to the pattern's stack if -> once decremented <- the pair counter is still > 0. */
-	  if (delimiter_pairs_c > 0){
+	  if (--delimiter_pairs_c > 0){
 	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
 	  }
 	  else{
@@ -903,7 +894,7 @@ int    bref_num = 0;
     switch(pattern[*token_ind + 1]){					\
     case 'd':								\
       if ((*new_pat_len += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
-	errno = 0; intern__fre__errmesg("Could not convert the Perl-like digit range '\\d'"); \
+	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like digit range '\\d'"); \
 	return FRE_ERROR;						\
       }									\
       while (FRE_POSIX_DIGIT_RANGE[i] != '\0'){				\
@@ -914,7 +905,7 @@ int    bref_num = 0;
       break;								\
     case 'D':								\
       if ((*new_pat_len += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
-	errno = 0; intern__fre__errmesg("Could not convert the Perl-like not digit range '\\D'"); \
+	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like not digit range '\\D'"); \
 	return FRE_ERROR;						\
       }									\
       while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') {			\
@@ -938,7 +929,6 @@ int    bref_num = 0;
  * POSIX supported constructs.
  */
 int intern__fre__perl_to_posix(fre_pattern *freg_object){
-  bool   call_handle_bref = false;         /* True when _certify_esq_seq found digits after a backslash. */
   size_t numof_seen_tokens = 0;            /* Used to help register back-reference positions. */
   size_t token_ind = 0;
   size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */

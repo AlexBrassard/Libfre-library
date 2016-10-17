@@ -5,7 +5,7 @@
 #include <errno.h>
 
 #include <fre.h>
-
+#include "fre_internal.h" /* print_ptable_hook() only */
 
 #define DEF_ARR_SIZE 1024
 
@@ -57,6 +57,7 @@ int main(int argc, char **argv)
   }
   printf("Input: %s\n\n", string);
   retval = fre_bind(argv[1], string, new_lenght);
+  print_ptable_hook();
   printf("Output: %s\n\n", string);
   if (string){
     free(string);

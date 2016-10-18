@@ -554,6 +554,7 @@ int intern__fre__compile_pattern(fre_pattern *freg_object)
 /*
  * MACRO - Add current token to the given stack and
  * update the given stack's TOS.
+ * Really isn't needed but it did make it easier on my brain when designing the library.
  */
 #define FRE_PUSH(token, stack, tos) do {		\
     stack[*tos] = token;				\
@@ -619,9 +620,9 @@ int FRE_FETCH_MODIFIERS(char *pattern,
   /* 
    * Decrement token_ind to fix an off by 1 error where token_ind would end up 1 more than the
    * terminating NUL byte of pattern, which was still in the process' address space causing chaos.
-   */
-  --(*token_ind);
   
+  --(*token_ind);
+  */
   return FRE_OP_SUCCESSFUL;
 }
 
@@ -660,226 +661,124 @@ int FRE_HANDLE_BREF(char *pattern,
 /* 
  * Strip a pattern from all its Perl-like elements.
  * Separates "matching" and "substitute" patterns of a 
- * substitution or transliteration operation.
+ * substitution or transliteration operation and register the
+ * substitute pattern's backreference positions here.
+ * The matching pattern's backreference positions are handled by _perl_to_posix().
  */
 int intern__fre__strip_pattern(char *pattern,
 			       fre_pattern *freg_object,
 			       size_t token_ind)
 {
-  size_t spa_tos = 0;                          /* ->striped_pattern[0|1]'s tos values. */
-  size_t spa_ind = 0;                          /* 0: matching pattern ind; 1: substitute pattern ind. */
-  size_t delimiter_pairs_c = 1;                /* Count of pairs of paired-delimiter seen.*/
-  size_t numof_seen_delimiter = 1;             /*
-						* We've been given the index of the first token 
-						* following the first delimiter. 
-						*/
-  size_t numof_seen_tokens = 0;                /* To help registering positions of back-references. */
-  
+  size_t spa_tos = 0;                      /* ->striped_pattern[0|1]'s tos values. */
+  size_t spa_ind = 0;                      /* 0: matching pattern ind; 1: substitute pattern ind. */
+  size_t delimiter_pairs = 1;              /* Count of pairs of paired-delimiter seen.*/
+  size_t numof_delimiters = 1;             /* Number of delimiters seen in pattern. */
+  size_t numof_tokens = 0;                 /* Amount of tokens seen since [0]: begining of string [>0]: since previous bref. */
+
+#ifdef FRE_TOKEN
+# undef FRE_TOKEN
+#endif
 #define FRE_TOKEN pattern[token_ind]
 
   while(1){
-    /* When reaching the end of pattern. */
     if (FRE_TOKEN == '\0'){
-      if ((freg_object->fre_op_flag == MATCH
-	   && (numof_seen_delimiter == FRE_EXPECTED_M_OP_DELIMITER))
-	  || freg_object->fre_paired_delimiters == true){
-	break;
-      }
-      /* End substitution/transliteration operations patterns. */
-      else if (freg_object->fre_op_flag == SUBSTITUTE || freg_object->fre_op_flag == TRANSLITERATE){
-	if ((numof_seen_delimiter == FRE_EXPECTED_ST_OP_DELIMITER)
-	    ||freg_object->fre_paired_delimiters == true){
-	  break;
-	}
-	else { /* Syntax error. */
-	  errno = 0;
- 	  intern__fre__errmesg("Encountered end of string before end of pattern");
-	  return FRE_ERROR;
-	}
-      }
-      else { /* Syntax error. */
-	errno = 0;
-	intern__fre__errmesg("Encountered end of string before end of pattern");
+      if (freg_object->fre_paired_delimiters == true){	break; }
+      else if (freg_object->fre_op_flag == MATCH
+	       && numof_delimiters == FRE_EXPECTED_M_OP_DELIMITER) { break; }
+      else if (numof_delimiters == FRE_EXPECTED_ST_OP_DELIMITER) { break; }
+      else{ /* Syntax error: Missing closing delimiter. */
+	errno = 0; intern__fre__errmesg("Pattern missing closing delimiter");
+	errno = ENODATA;
 	return FRE_ERROR;
       }
     }
-    /* 
-     * Increment numof_seen_tokens here, and
-     * decrement it when we find a backref.
-     * The first backref's position is taken from the begining of string,
-     * all following backrefs' positions are taken from the numof_seen_tokens
-     * since the previously found backref.
-     */
-    ++numof_seen_tokens;
+    ++numof_tokens;
 
-    /* 
-     * When spa_ind gets bigger than 1, Fetch the patterns
-     * modifiers and end _strip_pattern().
-     */
-    if (spa_ind > 1){
-      FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
-      break;
-    }
-    /* Handle patterns with paired-type delimiters. */
-    if (freg_object->fre_paired_delimiters == true){
-      /*
-       * When the pairs counter reaches 0, in a match op pattern
-       * we must push the next tokens if any to the modifier stack right now,
-       * else we must populate striped_pattern[1] first, then push any remaining 
-       * tokens to the modifiers stack. 
-       */
-      if (delimiter_pairs_c <= 0) {
-	if (freg_object->fre_op_flag == MATCH){
-	  FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
-	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
-	  break;
-	}
-	/* Handle patterns of a SUBSTITUTE or TRANSLITERATE operation.*/
-	else {
-	  /* Handle delimiters for when the delimiter_pairs_c[ount] is 0. */
-	  if(FRE_TOKEN == freg_object->delimiter){
-	    if (spa_ind == 0) { continue; }
-	    else if (spa_ind == 1) {
-	      spa_tos = 0;
-	      numof_seen_tokens = 0;
-	      ++delimiter_pairs_c;
-	      ++token_ind;
-	      continue;
-	    }
-	  }
-	  /* NULL terminate the spa_indexed striped_pattern. */
-	  else if (FRE_TOKEN == freg_object->c_delimiter){
-	    FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
-	    ++spa_ind;	    
-	    continue;
-	  }
-	}
-      }
-      /* delimiter_pairs > 0 */
-      else {
-	/* Handle delimiters when delimiter_pairs_c is not 0. */
-	if (FRE_TOKEN == freg_object->delimiter){
+    if (FRE_TOKEN == freg_object->delimiter){
+      if (freg_object->fre_paired_delimiters == true){
+	if (delimiter_pairs++ > 0){
 	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	  ++delimiter_pairs_c;
-	  ++token_ind;                  /* Get next token. */
-	  continue;
 	}
-	/* Found the end of a pair of delimiters. */
-	else if (FRE_TOKEN == freg_object->c_delimiter){
-	  /* Push it to the pattern's stack if -> once decremented <- the pair counter is still > 0. */
-	  if (--delimiter_pairs_c > 0){
-	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	  }
-	  else{
-	    spa_ind++;
-	  }
-	  ++token_ind;                  /* Get next token. */
-	  continue;
+	else {
+	  /* Begining a new pattern. spa_ind was incremented when we hit a ->c_delimiter. */
+	  spa_tos = 0;
+	  numof_tokens = 0;
 	}
-	/* Fetch the substitute pattern's sub-refs positions, if any, right now. */
-	if ((spa_ind == 1) && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')) {
-	  if (!isdigit(pattern[token_ind + 1])) {
-	    /* Let '$' be an anchor if the next token is not a digit. */
-	    FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	    ++token_ind;
-	    continue;
-	  }
-	  else {
-	    --numof_seen_tokens; 
-	    FRE_HANDLE_BREF(pattern,
-			    &token_ind,
-			    (freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_seen_tokens,
-			    1, freg_object);
-	    if (errno != 0) return FRE_ERROR;
-	    numof_seen_tokens = 0;
-	    continue; 
-	  }
-	}
-	/* When token is not a backref marker. */
-	FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);	
       }
-    } 
-
-    /* Handle non-paired delimiter type. */
-    else {
-      /* Handle delimiters. */
-      if (FRE_TOKEN == freg_object->delimiter){
-	/* Terminate pattern and adjust spa indexes to build the 2nd pattern, if any. */
+      else { /* non-pair-typed delimiters */
 	FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
-	++numof_seen_delimiter;
+	++numof_delimiters;
 	++spa_ind;
-	spa_tos = 0;
-	++token_ind; /* Get next token. */
-	numof_seen_tokens = 0;
-	continue;
-      }
-      /* Handle matching operation patterns. */
-      if (freg_object->fre_op_flag == MATCH){
-	if (numof_seen_delimiter < FRE_EXPECTED_M_OP_DELIMITER){
-	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	}
-	else if (numof_seen_delimiter == FRE_EXPECTED_M_OP_DELIMITER){
+	if ((spa_ind == 1 && freg_object->fre_op_flag == MATCH)
+	    || (spa_ind > 1 && freg_object->fre_op_flag != MATCH)){
+	  ++token_ind;
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	  continue;
 	}
 	else {
-	  /* Syntax error. */
-	  errno = 0;
-	  intern__fre__errmesg("Too many delimiters, forgot a backslash maybe?");
-	  return FRE_ERROR;
-	}
-      }
-      /* Handle substitution and transliteration operations patterns. */
-      else {
-	/* We've yet to encounter the expecte amount of delimiters. */
-	if (numof_seen_delimiter < FRE_EXPECTED_ST_OP_DELIMITER) {
-	  /* Handle a back-reference. */
-	  if (spa_ind == 1 && (FRE_TOKEN == '$' || FRE_TOKEN == '\\')){
-	    if (isdigit(pattern[token_ind + 1])){
-	      --numof_seen_tokens;
-	      FRE_HANDLE_BREF(pattern,
-			      &token_ind,
-			      (freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_seen_tokens,
-			      1, freg_object);
-	      if (errno != 0) return FRE_ERROR;
-	      numof_seen_tokens = 0;
-	      continue;
-	    }
-	    /* 
-	     * Let '$' be an anchor, push it on the pattern's stack
-	     * when the next token is not a digit.
-	     */
-	    else {
-	      FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	      ++token_ind;
-	      continue;
-	    }
-	  }
-	  /* When token is not a backref marker. */
-	  FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
-	}
-	/* 
-	 * Fetch the pattern's modifier(s) when the expected amount of
-	 * delimiters have been parsed.
-	 */
-	else if (numof_seen_delimiter == FRE_EXPECTED_ST_OP_DELIMITER) {
-	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
-	}
-	else {
-	  /* Syntax error. */
-	  errno = 0;
-	  intern__fre__errmesg("Too many delimiters, forgot a backslash maybe?");
-	  return FRE_ERROR;
+	  numof_tokens = 0;
+	  spa_tos = 0;
 	}
       }
     }
 
-    /* If we did not hit a continue statement yet, get next token. */
-    ++token_ind;
-  } /* while(1) */
+    else if (FRE_TOKEN == freg_object->c_delimiter){
+      if (delimiter_pairs == 0){
+	/* Syntax error. */
+	errno = 0; intern__fre__errmesg("Invalid sequence of pattern delimiters");
+	errno = EINVAL;
+	return FRE_ERROR;
+      }
+      if (--delimiter_pairs > 0){
+	FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
+      }
+      else {
+	FRE_PUSH('\0', freg_object->striped_pattern[spa_ind], &spa_tos);
+	if (freg_object->fre_op_flag == MATCH){
+	  ++token_ind;
+	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	  continue;
+	}
+	else{
+	  if (++spa_ind > 1) {
+	    ++token_ind;
+	    FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	    continue;
+	  }
+	  /* Make sure the next token is an opening delimiter. */
+	  if (pattern[token_ind + 1] != freg_object->delimiter) {
+	    /* Syntax error. */
+	    errno = 0; intern__fre__errmesg("Invalid character between opening and closing pattern delimiter");
+	    errno = EINVAL;
+	    return FRE_ERROR;
+	  }
+	}
+      }
+    }
+    /*
+     * The substitute pattern is not sent through _perl_to_posix()
+     * so we must capture the backreference position now if there's any.
+     */
+    else if (spa_ind == 1
+	     && (FRE_TOKEN == '\\' || FRE_TOKEN == '$')
+	     && isdigit(pattern[token_ind +1])){
+      --numof_tokens;
+      FRE_HANDLE_BREF(pattern, &token_ind,
+		      ((freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_tokens),
+		      1, freg_object);
+      numof_tokens = 0;
+    }
+    /* Just a regular character. */
+    else {
+      FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
+    }
 
+    ++token_ind; /* Get next token. */
+  }
   return FRE_OP_SUCCESSFUL;
-  
+
 } /* intern__fre__strip_pattern() */
+
 
 
 /*

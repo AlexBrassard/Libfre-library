@@ -335,7 +335,7 @@ int intern__fre__substitute_op(char *string,
     intern__fre__errmesg("Calloc");
     goto errjmp;
   }
-
+  WM_IND = 0; /* _match_op incremented it. */
   /* Match ! */
   if (match_ret == FRE_OP_SUCCESSFUL) {
     /* Replace back-reference(s) if there's any. */

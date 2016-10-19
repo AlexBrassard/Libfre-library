@@ -438,6 +438,7 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->fre_mod_icase = false;
   freg_object->fre_mod_ext = false;
   freg_object->fre_mod_global = false;
+  freg_object->fre_mod_sub_is_regex = false;
   freg_object->fre_p1_compiled = false;
   freg_object->fre_paired_delimiters = false;
   freg_object->delimiter = '\0';
@@ -685,7 +686,8 @@ int intern__fre__strip_pattern(char *pattern,
       if (freg_object->fre_paired_delimiters == true){	break; }
       else if (freg_object->fre_op_flag == MATCH
 	       && numof_delimiters == FRE_EXPECTED_M_OP_DELIMITER) { break; }
-      else if (numof_delimiters == FRE_EXPECTED_ST_OP_DELIMITER) { break; }
+      else if (numof_delimiters == FRE_EXPECTED_ST_OP_DELIMITER
+	       && freg_object->fre_op_flag != MATCH) { break; }
       else{ /* Syntax error: Missing closing delimiter. */
 	errno = 0; intern__fre__errmesg("Pattern missing closing delimiter");
 	errno = ENODATA;
@@ -759,7 +761,7 @@ int intern__fre__strip_pattern(char *pattern,
      * The substitute pattern is not sent through _perl_to_posix()
      * so we must capture the backreference position now if there's any.
      */
-    else if (spa_ind == 1
+    /*    else if (spa_ind == 1
 	     && (FRE_TOKEN == '\\' || FRE_TOKEN == '$')
 	     && isdigit(pattern[token_ind +1])){
       --numof_tokens;
@@ -768,6 +770,7 @@ int intern__fre__strip_pattern(char *pattern,
 		      1, freg_object);
       numof_tokens = 0;
     }
+    */
     /* Just a regular character. */
     else {
       FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
@@ -824,104 +827,99 @@ int intern__fre__strip_pattern(char *pattern,
   }while (0);
 
 /* 
+
+   Consider merging _perl_to_posix and _strip_pattern together.
+   - Note that _plp_parser() checks that the pattern's operation isn't a 
+     transliteration before calling _perl_to_posix.
+
  * Convert any non-POSIX, Perl-like elements into
  * POSIX supported constructs.
  */
-int intern__fre__perl_to_posix(fre_pattern *freg_object){
-  size_t numof_seen_tokens = 0;            /* Used to help register back-reference positions. */
+int intern__fre__perl_to_posix(fre_pattern *freg_object,
+			       size_t is_sub){
+  size_t numof_tokens = 0;            /* Used to help register back-reference positions. */
   size_t token_ind = 0;
   size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */
-  size_t new_pattern_len = strnlen(freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT);
+  size_t new_pattern_len = strnlen(freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT-1);
   char   new_pattern[FRE_MAX_PATTERN_LENGHT]; /* The array used to build the new pattern. */
 
+#ifdef FRE_TOKEN
 #undef FRE_TOKEN
-#define FRE_TOKEN freg_object->striped_pattern[0][token_ind]
+#endif
+#define FRE_TOKEN freg_object->striped_pattern[is_sub][token_ind]
 
-  while(1) {
+  if (!freg_object || (is_sub != 0 && is_sub != 1)){
+    errno = EINVAL;
+    return FRE_ERROR;
+  }
+  memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
+  while (1){
     if (FRE_TOKEN == '\0'){
-      /* Terminate the new pattern. */
       FRE_PUSH('\0', new_pattern, &new_pattern_tos);
       break;
     }
-    /*
-     * Increment numof_seen_tokens now, decrement it
-     * only when we're sure we found a backref. 
-     */
-    ++numof_seen_tokens;
-  
-    if (FRE_TOKEN == '\\' || FRE_TOKEN == '$'){
-      /* Must be a back-reference. */
-      if (isdigit(freg_object->striped_pattern[0][token_ind + 1])){
-	--numof_seen_tokens;
-	FRE_HANDLE_BREF(freg_object->striped_pattern[0],
+    ++numof_tokens;
+    /* Handle backreferences. */
+    if ((FRE_TOKEN == '\\' || FRE_TOKEN == '$')
+	&& (isdigit(freg_object->striped_pattern[is_sub][token_ind +1]))){
+      --numof_tokens;
+      if (is_sub){
+	FRE_HANDLE_BREF(freg_object->striped_pattern[is_sub],
 			&token_ind,
-			(freg_object->backref_pos->in_pattern_c == 0) ? new_pattern_tos : numof_seen_tokens,
-			0, freg_object);
-      	if (errno != 0) return FRE_ERROR;
-	numof_seen_tokens = 0;
-	continue;
+			(freg_object->backref_pos->in_substitute_c == 0) ? new_pattern_tos : numof_tokens,
+			is_sub, freg_object);
       }
-      /* Must be an escape sequence. */
-      else if (FRE_TOKEN == '\\'){
-	FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[0], &token_ind, new_pattern,
-			    &new_pattern_tos, &new_pattern_len, freg_object);
-	continue;
-      }
-      else {
-	FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
+      else{
+	FRE_HANDLE_BREF(freg_object->striped_pattern[is_sub],
+			&token_ind,
+			(freg_object->backref_pos->in_pattern_c == 0) ? new_pattern_tos : numof_tokens,
+			is_sub, freg_object);
       }
     }
-
-    else if (freg_object->fre_mod_ext == true){
+    /* Handle escape sequences. */
+    else if (FRE_TOKEN == '\\') {
+      FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[is_sub],
+			  &token_ind, new_pattern,
+			  &new_pattern_tos, &new_pattern_len,
+			  freg_object);
+    }
+    /*
+     * When the _sub_is_regex flag is false, 
+     * never go further with a substitute pattern. 
+     */
+    if (freg_object->fre_mod_sub_is_regex == false && is_sub == 1) {
+      FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
+      ++token_ind;
+      continue;
+    }
+    /* Handle comments. */
+    if (freg_object->fre_mod_ext == true) {
       if (isspace(FRE_TOKEN)) {
-	++token_ind;
-	continue;
+	while(isspace(FRE_TOKEN)) ++token_ind;
+	continue; /* Must avoid incrementing token_ind once more. */
       }
-      else if (FRE_TOKEN == '#'){
-	/* 
-	 * Skip tokens in the unmodified pattern, adjust the
-	 * lenght of the new_pattern, itself based from the lenght of
-	 * the unmodified pattern.
-	 */
-	FRE_SKIP_COMMENTS(freg_object->striped_pattern[0],
-			  &new_pattern_len,
-			  &token_ind);
-      }
-      /* Current token is not special. */
-      else {
-	FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
-	++token_ind;
-	continue;
+      if (FRE_TOKEN == '#') {
+	/* This condition will be replaced by: if (errno), after the call,  when the function is changed in a MACRO. */
+	if (FRE_SKIP_COMMENTS(freg_object->striped_pattern[is_sub],
+			      &new_pattern_len,
+			      &token_ind) != FRE_OP_SUCCESSFUL){
+	  intern__fre__errmesg("Fre_skip_comments");
+	  return FRE_ERROR;
+	}
+	continue; /* Must avoid incrementing token_ind once more. */
       }
     }
-
-    /* Valid token. */
-    else {
+    /* Just a regular token. */
+    else { 
       FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
     }
-    /* Get next token. */
-    ++token_ind;
-  } /* while(1) */
-
-  /* 
-   * Replace the matching pattern with the newly created one and
-   * make a copy of both striped-pattern pattern into the object's saved_pattern array. 
-   */
-  if (SU_strcpy(freg_object->striped_pattern[0], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
+    
+    ++token_ind; /* Get next token. */
+  }
+  if (SU_strcpy(freg_object->striped_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
     intern__fre__errmesg("SU_strcpy");
     return FRE_ERROR;
   }
-  if (SU_strcpy(freg_object->saved_pattern[0], freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT) == NULL){
-    intern__fre__errmesg("SU_strcpy");
-    return FRE_ERROR;
-  }
-  if (freg_object->striped_pattern[1][0] != '\0'){
-    if (SU_strcpy(freg_object->saved_pattern[1], freg_object->striped_pattern[1], FRE_MAX_PATTERN_LENGHT) == NULL){
-      intern__fre__errmesg("SU_strcpy");
-      return FRE_ERROR;
-    }
-  }
-
   return FRE_OP_SUCCESSFUL;
   
 } /* intern__fre__perl_to_posix() */

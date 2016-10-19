@@ -103,6 +103,7 @@ Fragment or reduce the size of your input.\n\n",
     /* If really we made it all the way here with an invalid operation just abort everything. */
     abort();
   }
+  print_pattern_hook(freg_object); /* DEBUG ONLY */
   intern__fre__free_pattern(freg_object);
   freg_object = NULL;
   /* Check how the operation went. */

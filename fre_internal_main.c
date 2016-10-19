@@ -117,9 +117,23 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
    * into a POSIX ERE conformant pattern. 
    */
   if (freg_object->fre_op_flag != TRANSLITERATE){
-    if (intern__fre__perl_to_posix(freg_object) != FRE_OP_SUCCESSFUL){
+    if (intern__fre__perl_to_posix(freg_object, 0) != FRE_OP_SUCCESSFUL){
       intern__fre__errmesg("Intern__fre__perl_to_posix");
       goto errjmp;
+    }
+    if (SU_strcpy(freg_object->saved_pattern[0], freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT) == NULL){
+      intern__fre__errmesg("SU_strcpy");
+      goto errjmp;
+    }
+    if (freg_object->fre_op_flag == SUBSTITUTE) {
+      if (intern__fre__perl_to_posix(freg_object, 1) != FRE_OP_SUCCESSFUL){
+	intern__fre__errmesg("Intern__fre__perl_to_posix");
+	goto errjmp;
+      }
+      if (SU_strcpy(freg_object->saved_pattern[1], freg_object->striped_pattern[1], FRE_MAX_PATTERN_LENGHT) == NULL){
+	intern__fre__errmesg("SU_strcpy");
+	goto errjmp;
+      }
     }
   }
 
@@ -128,6 +142,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     intern__fre__errmesg("Intern__fre__compile_pattern");
     goto errjmp;
   }
+  
   return freg_object; /* Success! */
   
  errjmp:
@@ -319,10 +334,7 @@ int intern__fre__substitute_op(char *string,
     intern__fre__errmesg("Intern__fre__match_op");
     goto errjmp;
   }
-  /* 
-   * Give new_string the maximum amount of memory argument string are allowed
-   * making sure we don't overflow when doing the substitutions. 
-   */
+
   if ((new_string = calloc(string_size, sizeof(char))) == NULL){
     intern__fre__errmesg("Calloc");
     return FRE_ERROR;
@@ -353,7 +365,6 @@ int intern__fre__substitute_op(char *string,
     while (string[i] != '\0'
 	   && ((size_t)i) < new_string_lenght){
       if (i == fre_pmatch_table->whole_match[WM_IND]->bo) {
-	++i;
 	if (intern__fre__cut_match(string_copy, &numof_tokens_skiped, string_size,
 				   (fre_pmatch_table->whole_match[WM_IND]->bo - numof_tokens_skiped),
 				   (fre_pmatch_table->whole_match[WM_IND]->eo - numof_tokens_skiped)) == NULL){
@@ -376,7 +387,8 @@ int intern__fre__substitute_op(char *string,
 	
 
 	/* Get the next match if there's one. */
-	if (fre_pmatch_table->whole_match[++(WM_IND)] != NULL
+	++WM_IND;
+	if (fre_pmatch_table->whole_match[WM_IND] != NULL
 	    && fre_pmatch_table->whole_match[WM_IND]->bo != -1){
 	  /* Restore the substitute pattern to a clean state. */
 	  if (freg_object->fre_subs_op_bref == true){

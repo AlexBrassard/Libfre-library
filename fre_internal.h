@@ -73,6 +73,7 @@ typedef struct fpattern {
   bool                  fre_mod_icase;          /* True when the '/i' modifier is activated. */
   bool                  fre_mod_ext;            /* True when the '/x' modifier is activated. */
   bool                  fre_mod_global;         /* True when the '/g' modifier is activated. */
+  bool                  fre_mod_sub_is_regex;   /* True when treating substitute pattern like a regex pattern. */
 
   /* Indicate whether or not to regfree() the pattern. */
   bool                  fre_p1_compiled;        /* True when stripped_pattern[0] has been regcomp()'d. */
@@ -240,10 +241,8 @@ fre_pattern* intern__fre__plp_parser(char *pattern);               /* The Perl-l
 int          intern__fre__strip_pattern(char * pattern,            /* Strip a pattern from its Perl-like elements. */
 					fre_pattern *freg_object,
 					size_t token_ind);
-int          intern__fre__perl_to_posix(fre_pattern *freg_object); /* 
-								    * Convert a stripped Perl-like pattern into a
-								    * POSIX ERE conformant pattern. 
-								    */
+int          intern__fre__perl_to_posix(fre_pattern *freg_object, /* Convert Perl-like constructs into POSIX constructs. */
+					size_t is_sub);
 					
 /** Regex operations routines. **/
 int          intern__fre__match_op(char *string,                   /* Execute a match operation. */			  

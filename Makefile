@@ -9,7 +9,8 @@
 # GCC compile flags
 GNUCC = gcc
 GNUCFLAGS =  -g3 -ggdb -pg -Wno-format -Wall -Wextra -Wpedantic \
-            -Wpointer-arith -Wstrict-prototypes -fsanitize=signed-integer-overflow
+            -Wpointer-arith -Wstrict-prototypes -fsanitize=signed-integer-overflow \
+            -Wno-unused-variable
 GNULDFLAGS = -lpthread
 
 # Other compilers will go here

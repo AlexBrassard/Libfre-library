@@ -110,6 +110,7 @@ typedef struct fre_pmatch_tab {
   fre_pattern           *ls_object;            /* Last seen freg_object, as returned by the _plp_parser(). */
   fre_smatch            **whole_match;         /* Begining/ending positions of every successful matches. */
   fre_smatch            **sub_match;           /* Begining/ending positions of every parenthesed expressions. */
+  int                   subm_per_match;        /* Number of submatches per matches. */
   size_t                wm_ind;                /* First free position of whole-match array. */
   size_t                sm_ind;                /* First free position of sub-matches array. */
   size_t                wm_size;               /* Size of whole-match array. */
@@ -204,10 +205,11 @@ fre_pmatch*    intern__fre__pmatch_location(void);                   /* To acces
 void           intern__fre__clean_head_table(void);                  /* Free memory used by all pmatch-tables created. */
 
 int            intern__fre__compile_pattern(fre_pattern *freg_object);/* Compile the modified pattern. */
-char*          intern__fre__insert_sm(fre_pattern *freg_object,      /* Insert all sub-matches in the given pattern. */
+int            intern__fre__insert_sm(fre_pattern *freg_object,       /* Insert all sub-matches in the given pattern. */
 				      char *string,
+				      int numof_tokens,
 				      size_t is_sub);
-char*          intern__fre__cut_match(char *string,                  /* Remove a character sequence from a string. */
+char*          intern__fre__cut_match(char *string,                   /* Remove a character sequence from a string. */
 				      size_t *numof_tokens_skiped,
 				      size_t string_size,
 				      size_t bo,

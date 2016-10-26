@@ -18,8 +18,9 @@ if ($#ARGV < 0){
     $tstring = shift;
 }
 
-if ($tstring =~ /\Q$pattern/g){
+if ($tstring =~ /\Q$pattern/mg){
     print ("Match!\n");
+    print ("$&\n");
     while ($-[$bo] && $+[$eo]){
 	print("Match->bo: $-[$bo++]\tMatch->eo: $+[$eo++]\n");
     }

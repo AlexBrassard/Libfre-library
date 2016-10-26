@@ -2,7 +2,7 @@
  *
  *
  *  Libfre's Public Interface.
- *  Version  0.400
+ *  Version  0.600
  *
  *
  */

@@ -3,7 +3,7 @@
  *
  *
  *  Libfre  -  Internal utilities.
- *  Version:   0.600
+ *  Version:   0.400
  *
  */
 
@@ -241,73 +241,6 @@ void intern__fre__free_bref_arr(fre_backref *to_free)
 
 
 /* 
- * Allocate memory for a fre_bound_pos* object that keeps track of 
- * where in pattern a word or non-word boundary is located. 
- */
-fre_bound_pos* intern__fre__init_bound_pos(void)
-{
-  fre_bound_pos *to_init = NULL;
-
-  if ((to_init = malloc(sizeof(fre_bound_pos))) == NULL){
-    intern__fre__errmesg("Malloc");
-    return NULL;
-  }
-  if ((to_init->boundary_pos = malloc(FRE_MAX_WORD_BOUNDARIES * sizeof(int))) == NULL){
-    intern__fre__errmesg("Malloc");
-    goto errjmp;
-  }
-  memset(to_init->boundary_pos, -1, FRE_MAX_WORD_BOUNDARIES);
-  if ((to_init->nboundary_pos = malloc(FRE_MAX_WORD_BOUNDARIES * sizeof(int))) == NULL){
-    intern__fre__errmesg("Malloc");
-    goto errjmp;
-  }
-  memset(to_init->nboundary_pos, -1, FRE_MAX_WORD_BOUNDARIES);
-  to_init->fre_word_bound = false;
-  to_init->fre_nword_bound = false;
-  to_init->bp_count = 0;
-  to_init->nbp_count = 0;
-  to_init->bp_size = FRE_MAX_WORD_BOUNDARIES;
-  to_init->nbp_size = FRE_MAX_WORD_BOUNDARIES;
-
-  return to_init;
-
-
- errjmp:
-  if (to_init){
-    if (to_init->boundary_pos){
-      free(to_init->boundary_pos);
-      to_init->boundary_pos = NULL;
-    }
-    if (to_init->nboundary_pos){
-      free(to_init->nboundary_pos);
-      to_init->nboundary_pos = NULL;
-    }
-    free(to_init);
-    to_init = NULL;
-  }
-  return NULL;
-
-} /* intern__fre__init_bound_pos() */
-
-
-void intern__fre__free_bound_pos(fre_bound_pos *to_free)
-{
-  if (!to_free)
-    return;
-
-  if (to_free->boundary_pos){
-    free(to_free->boundary_pos);
-    to_free->boundary_pos = NULL;
-  }
-  if (to_free->nboundary_pos){
-    free(to_free->nboundary_pos);
-    to_free->nboundary_pos = NULL;
-  }
-  free(to_free);
-  return;
-}
-  
-/* 
  * Allocate memory to a fre_smatch structure, 
  * used to register [sub]matches positions inside a matching string.
  * There's no deallocation function, free is being called by
@@ -469,10 +402,6 @@ fre_pattern* intern__fre__init_pattern(void)
     intern__fre__errmesg("Intern__fre__init_bref_arr");
     goto errjmp;
   }
-  if ((freg_object->bound_pos = intern__fre__init_bound_pos()) == NULL){
-    intern__fre__errmesg("Intern__fre__init_bound_pos");
-    goto errjmp;
-  }
   if ((freg_object->comp_pattern = malloc(sizeof(regex_t))) == NULL){
     intern__fre__errmesg("Malloc");
     goto errjmp;
@@ -517,6 +446,7 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->fre_op_flag = NONE;
   freg_object->fre_match_op_bref = false;
   freg_object->fre_subs_op_bref = false;
+  freg_object->operation = NULL;
   
   /* All set. */
   return freg_object;
@@ -530,10 +460,6 @@ fre_pattern* intern__fre__init_pattern(void)
     if (freg_object->comp_pattern != NULL){
       free(freg_object->comp_pattern);
       freg_object->comp_pattern = NULL;
-    }
-    if (freg_object->bound_pos) {
-      intern__fre__free_bound_pos(freg_object->bound_pos);
-      freg_object->bound_pos = NULL;
     }
     if (freg_object->striped_pattern != NULL){
       for (i = 0; i < 2; i++){
@@ -582,10 +508,6 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
     free(freg_object->comp_pattern);
     freg_object->comp_pattern = NULL;
   }
-  if (freg_object->bound_pos){
-    intern__fre__free_bound_pos(freg_object->bound_pos);
-    freg_object->bound_pos = NULL;
-  }
   if (freg_object->striped_pattern != NULL){
     for (i = 0; i < 2; i++){
       if (freg_object->striped_pattern[i] != NULL){
@@ -606,6 +528,7 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
     free(freg_object->saved_pattern);
     freg_object->saved_pattern = NULL;
   }
+  freg_object->operation = NULL;
 
   free(freg_object);
 
@@ -736,44 +659,6 @@ int FRE_HANDLE_BREF(char *pattern,
   return FRE_OP_SUCCESSFUL;
 }
 
-
-/*
- * Pushes all tokens as literal characters until the
- * '\E' sequence or end of pattern is found. 
- */
-#define FRE_QUOTE_TOKENS(qpattern, qtoken_ind, qnew_pat, qnew_pat_tos, qnew_pat_len, qfreg_object) do { \
-    if ((qnew_pat_len + 2) >= FRE_MAX_PATTERN_LENGHT) {			\
-      errno = 0; intern__fre__errmesg("Overflow replacing the quoted character sequence."); \
-      errno = EOVERFLOW; return FRE_ERROR;				\
-    }									\
-    (*qtoken_ind) += 2;							\
-    FRE_PUSH('[', qnew_pat, qnew_pat_tos);				\
-    while(qpattern[*qtoken_ind] != '\0'){				\
-      if (qpattern[*qtoken_ind] == '\\') {				\
-	if (qpattern[(*qtoken_ind)+1] == 'E'){				\
-	  *qtoken_ind += 2;						\
-	  break;							\
-	}								\
-	else if (qfreg_object->fre_paired_delimiters == true) {		\
-	  if (qpattern[(*qtoken_ind)+1] == qfreg_object->c_delimiter || qpattern[(*qtoken_ind)+1] == qfreg_object->delimiter){ \
-	    ++(*qtoken_ind);						\
-	  }								\
-	}								\
-	else if (qpattern[(*qtoken_ind)+1] == qfreg_object->delimiter) { \
-	  ++(*qtoken_ind);						\
-	}								\
-      }									\
-      else if (qfreg_object->fre_paired_delimiters == true){		\
-	if (qpattern[*qtoken_ind] == qfreg_object->c_delimiter) break;	\
-      }									\
-      else if (qpattern[*qtoken_ind] == qfreg_object->delimiter) {	\
-	break;								\
-      }									\
-      FRE_PUSH(qpattern[(*qtoken_ind)++], qnew_pat, qnew_pat_tos);	\
-    }									\
-    FRE_PUSH(']', qnew_pat, qnew_pat_tos);				\
-  } while (0);
-
 /* 
  * Strip a pattern from all its Perl-like elements.
  * Separates "matching" and "substitute" patterns of a 
@@ -781,7 +666,7 @@ int FRE_HANDLE_BREF(char *pattern,
  * substitute pattern's backreference positions here.
  * The matching pattern's backreference positions are handled by _perl_to_posix().
  */
-int intern__fre__split_pattern(char *pattern,
+int intern__fre__strip_pattern(char *pattern,
 			       fre_pattern *freg_object,
 			       size_t token_ind)
 {
@@ -798,7 +683,7 @@ int intern__fre__split_pattern(char *pattern,
 
   while(1){
     if (FRE_TOKEN == '\0'){
-      if (freg_object->fre_paired_delimiters == true && delimiter_pairs == 0){	break; }
+      if (freg_object->fre_paired_delimiters == true){	break; }
       else if (freg_object->fre_op_flag == MATCH
 	       && numof_delimiters == FRE_EXPECTED_M_OP_DELIMITER) { break; }
       else if (numof_delimiters == FRE_EXPECTED_ST_OP_DELIMITER
@@ -811,23 +696,6 @@ int intern__fre__split_pattern(char *pattern,
     }
     ++numof_tokens;
 
-    /* Handle some escape sequences here (instead of protecting them so they reach _perl_to_posix()) */
-    if (FRE_TOKEN == '\\') {
-      if (pattern[token_ind+1] == 'Q'){
-	FRE_QUOTE_TOKENS(pattern, &token_ind,
-			 freg_object->striped_pattern[spa_ind],
-			 &spa_tos, strlen(freg_object->striped_pattern[spa_ind]),
-			 freg_object);
-      }
-      else if (pattern[token_ind+1] == freg_object->delimiter
-	       || (freg_object->fre_paired_delimiters == true
-		   && pattern[token_ind+1] == freg_object->c_delimiter)){
-	FRE_PUSH(pattern[++token_ind], freg_object->striped_pattern[spa_ind], &spa_tos);
-	++token_ind;
-	continue;
-      }
-    }
-    
     if (FRE_TOKEN == freg_object->delimiter){
       if (freg_object->fre_paired_delimiters == true){
 	if (delimiter_pairs++ > 0){
@@ -889,6 +757,21 @@ int intern__fre__split_pattern(char *pattern,
 	}
       }
     }
+    /*
+     * The substitute pattern is not sent through _perl_to_posix()
+     * so we must capture the backreference position now if there's any.
+     */
+    /*    else if (spa_ind == 1
+	     && (FRE_TOKEN == '\\' || FRE_TOKEN == '$')
+	     && isdigit(pattern[token_ind +1])){
+      --numof_tokens;
+      FRE_HANDLE_BREF(pattern, &token_ind,
+		      ((freg_object->backref_pos->in_substitute_c == 0) ? spa_tos : numof_tokens),
+		      1, freg_object);
+      numof_tokens = 0;
+    }
+    */
+    /* Just a regular character. */
     else {
       FRE_PUSH(FRE_TOKEN, freg_object->striped_pattern[spa_ind], &spa_tos);
     }
@@ -897,44 +780,8 @@ int intern__fre__split_pattern(char *pattern,
   }
   return FRE_OP_SUCCESSFUL;
 
-} /* intern__fre__split_pattern() */
+} /* intern__fre__strip_pattern() */
 
-
-#define FRE_EXTEND_BOUND_ARRAY(array, array_size) do{			\
-    int i = 0, new_size = array_size * 2;				\
-    int *new_array = NULL;						\
-    if ((new_array = realloc(array, new_size * sizeof(int*))) == NULL){	\
-      intern__fre__errmesg("Realloc"); return FRE_ERROR;		\
-    }									\
-    for (i = array_size; i < new_size; i++)				\
-      new_array[i] = -1;						\
-    array = new_array; array_size = new_size;				\
-  } while (0);
-
-  
-
-/* 
- * Register the position of a word/non-word boundary and
- * extend any array that's short on free space.
-
- * Takes the token index of the sequence's leading backslash,
- * a 1 or 0 value indicating whether the sequence is a word or non-word 
- * boundary sequence and the fre_pattern we're working on.
- */
-#define FRE_REGISTER_WORD_BOUNDARY(bound_ind, is_word, bfreg_object) do{ \
-    int *bsize = ((is_word) ? &bfreg_object->bound_pos->bp_size : &bfreg_object->bound_pos->nbp_size); \
-    int *bcount = ((is_word)? &bfreg_object->bound_pos->bp_count : &freg_object->bound_pos->nbp_count);	\
-    if (is_word)	{						\
-      if (*bcount == *bsize)						\
-	FRE_EXTEND_BOUND_ARRAY(bfreg_object->bound_pos->boundary_pos, bfreg_object->bound_pos->bp_size); \
-      bfreg_object->bound_pos->boundary_pos[(*bcount)++] = *bound_ind;	\
-    }									\
-    else {								\
-      if(*bcount == *bsize)						\
-	FRE_EXTEND_BOUND_ARRAY(bfreg_object->bound_pos->nboundary_pos, bfreg_object->bound_pos->nbp_size); \
-      bfreg_object->bound_pos->nboundary_pos[(*bcount)++] = *bound_ind;	\
-    }									\
-  } while(0);
 
 
 /*
@@ -950,62 +797,26 @@ int intern__fre__split_pattern(char *pattern,
     case 'd':								\
       if ((*new_pat_len += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
 	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like digit range '\\d'"); \
-	errno = EOVERFLOW; return FRE_ERROR;				\
+	return FRE_ERROR;						\
       }									\
-      while (FRE_POSIX_DIGIT_RANGE[i] != '\0') FRE_PUSH(FRE_POSIX_DIGIT_RANGE[i++], new_pat, new_pat_tos); \
+      while (FRE_POSIX_DIGIT_RANGE[i] != '\0'){				\
+	FRE_PUSH(FRE_POSIX_DIGIT_RANGE[i++], new_pat, new_pat_tos);	\
+      }									\
       /* Adjust the token index. */					\
-      *token_ind += 2;							\
+      (*token_ind) += 2;						\
       break;								\
     case 'D':								\
       if ((*new_pat_len += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
 	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like not digit range '\\D'"); \
-	errno = EOVERFLOW; return FRE_ERROR;				\
+	return FRE_ERROR;						\
       }									\
-      while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') FRE_PUSH(FRE_POSIX_NON_DIGIT_RANGE[i++], new_pat, new_pat_tos); \
+      while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') {			\
+	FRE_PUSH(FRE_POSIX_NON_DIGIT_RANGE[i++], new_pat, new_pat_tos)	\
+      }									\
       /* Adjust the token index. */					\
-      *token_ind += 2;							\
-      break;								\
-    case 'w':								\
-      if ((*new_pat_len += strlen(FRE_POSIX_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow convering Perl-like '\\w' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;				\
-      }									\
-      while (FRE_POSIX_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_WORD_CHAR[i++], new_pat, new_pat_tos); \
-      *token_ind += 2;							\
+      (*token_ind) += 2;						\
       break;								\
       /* More test will go here. */					\
-    case 'W':								\
-      if ((*new_pat_len += strlen(FRE_POSIX_NON_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){	\
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\W' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;				\
-      }									\
-      while (FRE_POSIX_NON_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_WORD_CHAR[i++], new_pat, new_pat_tos); \
-      *token_ind += 2;							\
-      break;								\
-    case 's':								\
-      if ((*new_pat_len += strlen(FRE_POSIX_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\s' into a POSIX construct.");	\
-	errno = EOVERFLOW; return FRE_ERROR;				\
-      }									\
-      while (FRE_POSIX_SPACE_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_SPACE_CHAR[i++], new_pat, new_pat_tos); \
-      *token_ind += 2;							\
-      break;								\
-    case 'S':								\
-      if ((*new_pat_len += strlen(FRE_POSIX_NON_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\S' into a POSIX construct.");	\
-	errno = EOVERFLOW; return FRE_ERROR;				\
-      }									\
-      while (FRE_POSIX_NON_SPACE_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_SPACE_CHAR[i++], new_pat, new_pat_tos); \
-      *token_ind += 2;							\
-      break;								\
-    case 'b':								\
-      FRE_REGISTER_WORD_BOUNDARY(new_pat_tos, 1,freg_object);		\
-      *token_ind += 2;							\
-      break;								\
-    case 'B':								\
-      FRE_REGISTER_WORD_BOUNDARY(new_pat_tos, 0, freg_object);		\
-      *token_ind += 2;							\
-      break;								\
     default:								\
       /* Assume a supported sequence, push the tokens on the pattern stack. */ \
       FRE_PUSH(pattern[(*token_ind)++], new_pat, new_pat_tos);		\
@@ -1016,6 +827,11 @@ int intern__fre__split_pattern(char *pattern,
   }while (0);
 
 /* 
+
+   Consider merging _perl_to_posix and _strip_pattern together.
+   - Note that _plp_parser() checks that the pattern's operation isn't a 
+     transliteration before calling _perl_to_posix.
+
  * Convert any non-POSIX, Perl-like elements into
  * POSIX supported constructs.
  */
@@ -1069,7 +885,6 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 			  &token_ind, new_pattern,
 			  &new_pattern_tos, &new_pattern_len,
 			  freg_object);
-      continue;
     }
     /*
      * When the _sub_is_regex flag is false, 
@@ -1236,7 +1051,6 @@ char* intern__fre__cut_match(char *string,
 void print_pattern_hook(fre_pattern* pat)
 {
   size_t i = 0;
-  int c = 0;
   if (pat == NULL){
     pthread_mutex_lock(&fre_stderr_mutex);
     fprintf(stderr, "Pattern is NULL\n");
@@ -1275,13 +1089,8 @@ void print_pattern_hook(fre_pattern* pat)
   fprintf(stderr, "\n          \t %-17s:", "sub-match number");
   for (i = 0; i < pat->backref_pos->in_substitute_c; i++)
     fprintf(stderr, "%ld ", pat->backref_pos->s_sm_number[i]);
-  fprintf(stderr, "\nWord boundary positions: ");
-  for (c = 0; c < pat->bound_pos->bp_size && pat->bound_pos->boundary_pos[c] != -1; c++)
-    fprintf(stderr, "%d ", pat->bound_pos->boundary_pos[c]);
-  fprintf(stderr, "\nNon-word boundary positions: ");
-  for(c = 0; c < pat->bound_pos->nbp_size && pat->bound_pos->nboundary_pos[c] != -1; c++)
-    fprintf(stderr, "%d ", pat->bound_pos->nboundary_pos[c]);
-  fprintf(stderr,"\ncomp_pattern %s\n",
+  fprintf(stderr,"\noperation %s\ncomp_pattern %s\n",
+	  ((pat->operation != NULL) ? "Defined" : "NULL"),
 	  ((pat->comp_pattern != NULL) ? "Defined" : "NULL"));
   fprintf(stderr, "striped_pattern[0] %s\nstriped_pattern[1] %s\n",
 	  pat->striped_pattern[0], pat->striped_pattern[1]);

@@ -1,7 +1,7 @@
 # Testing internal function at the moment.
 
 libfre.so{
-	global:
+	global: fre_bind
 
 
 	local:

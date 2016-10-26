@@ -1,7 +1,7 @@
 /*
  *
  *  Libfre  -  Main internal functions.
- *  Version:   0.600
+ *  Version:   0.400
  *
  */
 
@@ -107,7 +107,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
    * Strip a pattern from its Perl-like element,
    * split the "matching pattern" and "substitute" pattern (if there's one).
    */
-  if (intern__fre__split_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
+  if (intern__fre__strip_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
     intern__fre__errmesg("Intern__fre__strip_pattern");
     goto errjmp;
   }
@@ -470,14 +470,7 @@ int intern__fre__substitute_op(char *string,
     intern__fre__errmesg("SU_strcpy");
     goto errjmp;
   }
-  if (new_string){
-    free(new_string);
-    new_string = NULL;
-  }
-  if (string_copy){
-    free(string_copy);
-    string_copy = NULL;
-  }
+
   return FRE_OP_SUCCESSFUL;
 
  errjmp:

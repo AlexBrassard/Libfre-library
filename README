@@ -28,14 +28,10 @@ and I'm not very original with names.
 
 
 -Version 0.00 up to 1.00 will concentrate on making things works, especialy the 3 basic operations:
-   match, substitution and transliteration, with only limited support for most non-POSIX compatible
+   match, substitution and transliteration,will and on adding support for most if not all non-POSIX compatible
    Perl-like constructs.
    "Messy" functions or blocks will be either cleaned/simplified or simply rewritten before v1.00.
    A short manpage is to be added before v1.00 and likely extended with every added features and functionalities.
-
-
--Version 1.01 up to 2.00 will concentrate on adding support for most if not all non-POSIX compatible
-   Perl-like constructs.
 
 
 -Further versions will concentrate on profiling and optimizations.

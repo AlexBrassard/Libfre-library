@@ -153,9 +153,70 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
 } /* intern__fre__plp_parser() */
 
 
-
+/* To shorten a little bit my already freaking long variable names: */
 #define WM_IND fre_pmatch_table->wm_ind
 #define SM_IND fre_pmatch_table->sm_ind
+
+
+/*
+ * Takes the fre_pattern we're working on, the caller's string, a 0 or 1 value indicating whether
+ * to check on either of the matching and substitute pattern respectively, the number of tokens
+ * skipped by previous _cut_match() operations and a pointer to an int 
+ * indicating whether we had success or not. 1 all good, -1 error, 0 not a boundary.
+ 
+ * Note that *ret must be set to 0 if it's 1 and 1 if it's 0 once the checks are made
+ * in cases when a not-a-word boundary \B is used. 
+	if (freg_object->fre_not_boundary == true){			\
+	  if (*ret) *ret = 0; else *ret = 1;				\
+	}								\
+
+ */
+
+#define FRE_CHECK_BOUNDARY(freg_object, string, is_sub, ret) do {	\
+    bool op_bow = ((is_sub) ? freg_object->fre_subs_op_bow : freg_object->fre_match_op_bow); \
+    bool op_eow = ((is_sub) ? freg_object->fre_subs_op_eow : freg_object->fre_match_op_eow); \
+    if (op_bow == true){						\
+      if (fre_pmatch_table->whole_match[WM_IND]->bo > 0){		\
+	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->bo-(*numof_tokens)-1])) *ret = 0; \
+	else *ret = 1;							\
+      }									\
+      else { *ret = 1;							\
+      }									\
+      /* Inverse resuls of previous op if the boundary sequence is '\B' */ \
+      if (freg_object->fre_not_boundary == true){			\
+	if (*ret) *ret = 0; else *ret = 1;				\
+      }									\
+    }									\
+    if (op_eow == true){						\
+      /* String's lenght has been checked to be under INT_MAX-1 when entering the library. */ \
+      if (fre_pmatch_table->whole_match[WM_IND]->eo == (int)strlen(string)-1){ \
+	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->eo-(*numof_tokens)+1])) *ret = 0; \
+	else *ret = 1;							\
+      }									\
+      else { *ret = 1;							\
+      }									\
+      /* Inverse resuls of previous op if the boundary sequence is '\B' */ \
+      if (freg_object->fre_not_boundary == true){			\
+	if (*ret) *ret = 0; else *ret = 1;				\
+      }									\
+    }									\
+  } while(0);
+
+/* 
+ * Reset the ptable's ->whole_match[WM_IND] field and all it's corresponding
+ * sub-matches to -1.
+ */
+#define FRE_CANCEL_CUR_MATCH() do {			\
+    int i = 0;						\
+    fre_pmatch_table->whole_match[WM_IND]->bo = -1;	\
+    fre_pmatch_table->whole_match[WM_IND]->eo = -1;	\
+    while(i++ < fre_pmatch_table->subm_per_match){	\
+      fre_pmatch_table->sub_match[SM_IND]->bo = -1;	\
+      fre_pmatch_table->sub_match[SM_IND]->eo = -1;	\
+      if (SM_IND > 0) --SM_IND;				\
+    }							\
+  } while(0);
+
 
 int intern__fre__match_op(char *string,                  /* The string to bind the pattern against. */
 			  fre_pattern *freg_object,      /* The information gathered by the _plp_parser(). */
@@ -202,45 +263,59 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	++reg_c;
 	/* Extend the sub-match list if needed. */
 	if (++SM_IND >= fre_pmatch_table->sm_size){
-	  int new_size = 0;
-	  if (fre_pmatch_table->sm_size * 2 > INT_MAX -1) {
-	    errno = EOVERFLOW;
+	  /* 0 == whole_match list, 1 == sub_match list. */
+	  if (intern__fre__extend_ptable_list(1) == FRE_ERROR){
+	    intern__fre__errmesg("Intern__fre__extend_ptable_list");
 	    goto errjmp;
 	  }
-	  new_size = (int)fre_pmatch_table->sm_size * 2;
-
-
-	  if ((stemp = realloc(fre_pmatch_table->sub_match, new_size * sizeof(fre_smatch*))) == NULL){
-	    intern__fre__errmesg("Realloc");
-	    goto errjmp;
-	  }
-	  for (i = SM_IND; i < new_size; i++)
-	    if ((stemp[i] = intern__fre__init_smatch()) == NULL){
-	      intern__fre__errmesg("Intern__fre__init_smatch");
-	      goto errjmp;
-	    }
-	  fre_pmatch_table->sub_match = stemp;
-	  fre_pmatch_table->sm_size = new_size;
-	  stemp = NULL;
-	}	
+	}
       }
     }
     else {
       /* 
        * If the match is considered successful but regmatch[0] 
        * contains only -1s, we've got a problem. 
-       * Long was of saying it can never happen or chaos and darkness will follow. 
+       * Long way of saying it can never happen or chaos and darkness will follow. 
        */
       errno = 0;
       intern__fre__errmesg("No valid positions in regmatch array element 0.");
       errno = ENODATA;
       goto errjmp;
     }
-    /*
-     * The number of sub-matches per matches.
-     * -2: regmatch[0] is the whole match, reg_c always ends at regmatch[last+1]. <- not anymore no.
-     */
+    /*The number of sub-matches per matches. */
     fre_pmatch_table->subm_per_match = reg_c - 1;
+
+    /* 
+     * Check for the presence of word boundaries now. 
+     * Not sure yet where exactly to check boundaries in a substitute pattern. See NOTES.
+
+     * remove goto temporary_global and directly call _cut_match then recurse right here.
+     */
+    if (freg_object->fre_match_op_bow == true || freg_object->fre_match_op_eow == true){
+      match_ret = 0;
+      FRE_CHECK_BOUNDARY(freg_object, string, 0, &match_ret);
+      if ((fre_pmatch_table->lastop_retval = match_ret) != FRE_OP_SUCCESSFUL){
+	if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
+				   fre_pmatch_table->whole_match[WM_IND]->bo,
+				   fre_pmatch_table->whole_match[WM_IND]->eo) == NULL){
+	  intern__fre__errmesg("Intern__fre__cut_match");
+	  goto errjmp;
+	}
+	/* Clear the current, unsuccessful match position from the pmatch_table. */
+	FRE_CANCEL_CUR_MATCH();
+	/*	if (++WM_IND >= fre_pmatch_table->wm_size)
+		if (intern__fre__extend_ptable_list(0) == FRE_ERROR){
+		intern__fre__errmesg("intern__fre__extend_ptable_list");
+		goto errjmp;
+		}*/
+	if (intern__fre__match_op(string_copy, freg_object, numof_tokens) == FRE_ERROR){
+	  intern__fre__errmesg("Intern__fre__match_op");
+	  goto errjmp;
+	}
+	/*	goto temporary_global;*/
+	/*	return match_ret;*/
+      }
+    }
     
     if (freg_object->fre_match_op_bref == true){
       SM_IND -= fre_pmatch_table->subm_per_match;
@@ -264,41 +339,19 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       }
       else {
 	fre_pmatch_table->lastop_retval = FRE_OP_UNSUCCESSFUL;
-	fre_pmatch_table->whole_match[WM_IND]->bo = -1;
-	fre_pmatch_table->whole_match[WM_IND]->eo = -1;
-	i = 0;
-	/* Might be an off by 1 error here look further. */
-	while (i++ < fre_pmatch_table->subm_per_match){
-	  fre_pmatch_table->sub_match[SM_IND]->bo = -1;
-	  fre_pmatch_table->sub_match[SM_IND]->eo = -1;
-	  if (SM_IND != 0) --SM_IND;
-	}
+	/* Resets revelant fields of the ptable to -1. */
+	FRE_CANCEL_CUR_MATCH();
       }
     }
     /* Extend the ->whole_match list if needed. */
-    if (++WM_IND >= fre_pmatch_table->wm_size){
-      int new_size = 0;
-      if (fre_pmatch_table->wm_size * 2 > INT_MAX -1) {
-	errno = EOVERFLOW;
+    if (++WM_IND >= fre_pmatch_table->wm_size)
+      if (intern__fre__extend_ptable_list(0) == FRE_ERROR){
+	intern__fre__errmesg("Intern__fre__extend_ptable_list");
 	goto errjmp;
       }
-      new_size = (int)fre_pmatch_table->wm_size * 2;
-      
-      if ((wtemp = realloc(fre_pmatch_table->whole_match, new_size * sizeof(fre_smatch*))) == NULL){
-	intern__fre__errmesg("Realloc");
-	goto errjmp;
-      }
-      for (i = WM_IND; i < new_size; i++)
-	if ((wtemp[i] = intern__fre__init_smatch()) == NULL){
-	  intern__fre__errmesg("Intern__fre__init_smatch");
-	  goto errjmp;
-	}
-      fre_pmatch_table->wm_size = new_size;
-      fre_pmatch_table->whole_match = wtemp;
-      wtemp = NULL;
-    }
     /* Handle global operations. */
     if (freg_object->fre_mod_global == true){
+    temporary_global:
       if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
 				 fre_pmatch_table->whole_match[WM_IND-1]->bo,
 				 fre_pmatch_table->whole_match[WM_IND-1]->eo) == NULL){

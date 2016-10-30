@@ -55,19 +55,6 @@ typedef struct fre_brefs {
 } fre_backref;
 
 
-/* Keep track of word boundaries pattern positions. */
-typedef struct fbwpos {
-  bool                  fre_word_bound;  /* True when pattern contains word boundaries. */
-  bool                  fre_nword_bound; /* True when patter contains non-word boundaries. */
-  int                   *boundary_pos;   /* Positions of word boundaries within the regex pattern. */
-  int                   *nboundary_pos;  /* Position of non-word boundaries within the regex pattern. */
-  int                   bp_count;        /* First free position of boundary_pos. */
-  int                   nbp_count;       /* First free position of nboundary_pos. */
-  int                   bp_size;         /* Size of boundary_pos. */
-  int                   nbp_size;        /* Size of nboundary_pos. */
-
-} fre_bound_pos;
-
 /* Flag to indicate a fre_pattern's operation. */
 typedef enum foperation {
   NONE = -1,
@@ -91,6 +78,13 @@ typedef struct fpattern {
   /* Indicate whether or not to regfree() the pattern. */
   bool                  fre_p1_compiled;        /* True when stripped_pattern[0] has been regcomp()'d. */
 
+  /* Word boundaries. */
+  bool                  fre_not_boundary;       /* True when the sequence is 'not a word boundary \B'. */
+  bool                  fre_match_op_bow;       /* True when a begining of word sequence is found in a matching pattern. */
+  bool                  fre_match_op_eow;       /* True when an ending of word sequence is found in a matching pattern. */
+  bool                  fre_subs_op_bow;        /* True when a begining of word sequence is found in a substitute pattern. */
+  bool                  fre_subs_op_eow;        /* True when an ending of word sequence is found in a substitute pattern. */
+  
   /* Pattern's delimiter(s) */
   bool                  fre_paired_delimiters;  /* True when delimiter is one of  { ( [ <  */
   char                  delimiter;              /* The delimiter used in the pattern. */
@@ -104,9 +98,6 @@ typedef struct fpattern {
   bool                  fre_subs_op_bref;       /* True when back-reference(s) are found in the substitute pattern. */
   fre_backref           *backref_pos;           /* Contains positions of back-references, when fre_op_bref is true. */
   
-  /* Word boundaries, pattern positions. */
-  fre_bound_pos         *bound_pos;             /* Holds positions in pattern of word boundaries, if any. */
-
   /* Patterns */
   regex_t               *comp_pattern;         /* The compiled regex pattern. */
   char                  **striped_pattern;     /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
@@ -150,21 +141,22 @@ typedef struct fre_head_tab {
 
 
 /** Constants **/
-
+#ifndef ENODATA
+# define ENODATA                       62      /* Not defined on BSD */
+#endif
 # define FRE_MAX_PATTERN_LENGHT        256     /* 256 to keep our POSIX conformance. */
 # define FRE_EXPECTED_M_OP_DELIMITER   2       /* Number of expected delimiters for a match op pattern. */
 # define FRE_EXPECTED_ST_OP_DELIMITER  3       /* Number of expected delimiters for subs. and trans. op patterns. */
 # define FRE_MAX_MATCHES               128     /* Default maximum number of matches. */
 # define FRE_MAX_SUB_MATCHES           32      /* Default maximum number of submatches. */
 # define FRE_HEADNODE_TABLE_SIZE       4       /* Arbitrary. Default number of pmatch_tables in the headnode_table. */
-# define FRE_MAX_WORD_BOUNDARIES       64      /* Arbitrary. Maximum number of recorded word/non-word boundaries per pattern. */
 
 /* Must be INT_MAX to safely fetch sub-match(es) position(s). */
 # define FRE_ARG_STRING_MAX_LENGHT     INT_MAX /* Maximum lenght of fre_bind()'s string argument, '\0' included. */
 
 /* 
  * Successful is set to 1, it makes for prettier 'if' statements. 
- * Ex: if (fre_bind(pattern,string)) { puts("Matched!"); }
+ * Ex:     if (fre_bind(pattern, string, str_size)) puts("Matched!");
  */
 # define FRE_OP_SUCCESSFUL             1       /* Indicate a successful operation. */
 # define FRE_OP_UNSUCCESSFUL           0       /* Indicate an unsuccessful operation. */
@@ -212,8 +204,7 @@ void           intern__fre__free_bref_arr(fre_backref *to_free);     /* Free res
 fre_smatch*    intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
 fre_pmatch*    intern__fre__init_pmatch_table(void);
 void           intern__fre__free_pmatch_table(fre_pmatch *node);
-fre_bound_pos* intern__fre__init_bound_pos(void);                    /* Initialize a fre_bound_pos object. */
-void           intern__fre__free_bound_pos(fre_bound_pos *to_free);  /* Release resources of a single fre_bound_pos object. */ 
+int            intern__fre__extend_ptable_list(int listnum);         /* Extend a pmatch-table's whole/sub_match field. */
 fre_pattern*   intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
 void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
 fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */

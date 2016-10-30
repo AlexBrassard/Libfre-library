@@ -13,54 +13,55 @@ P---  Pseudo-coded.
 PCMOI	      function_name	   file(abreviation) Description
 
 /** Intern API **/
--C--	      SU_strcpy			     utils.c Safetly copy a string to another.
-PC-- 	      intern__fre__init_pattern      utils.c Allocate memory for a fre_pattern* object.
--C--	      intern__fre__free_pattern      utils.c Deallocate memory of a fre_pattern* object.
--C--	      intern__fre__init_bref_arr     utils.c Allocate memory for a fre_backref* object.
--C--	      intern__fre__free_bref_arr     utils.c Deallocate memory for a fre_backref* object.
-PC--	      intern__fre__init_smatch	     utils.c Allocate memory for a fre_smatch* object.
--C--	      intern__fre__init_pmatch_table utils.c Allocate memory for a single table of type fre_pmatch*.
--C--	      intern__fre__free_pmatch_table utils.c Deallocate memory for a single table of type fre_pmatch*.
--C--	      intern__fre__init_head_table   utils.c Initialize the global headnode table.
--C--	      intern__fre__free_head_table   utils.c Release resources of the global headnode table itself.
--C--	      intern__fre__init_bound_pos    utils.c Allocate memory for a fre_boundary_pos* object.
--C--	      intern__fre__free_bound_pos    utils.c Release memory allocated for a single fre_boundary_pos* object.
+-C--	      SU_strcpy			      utils.c Safetly copy a string to another.
+PC-- 	      intern__fre__init_pattern       utils.c Allocate memory for a fre_pattern* object.
+-C--	      intern__fre__free_pattern       utils.c Deallocate memory of a fre_pattern* object.
+-C--	      intern__fre__init_bref_arr      utils.c Allocate memory for a fre_backref* object.
+-C--	      intern__fre__free_bref_arr      utils.c Deallocate memory for a fre_backref* object.
+PC--	      intern__fre__init_smatch	      utils.c Allocate memory for a fre_smatch* object.
+-C--	      intern__fre__init_pmatch_table  utils.c Allocate memory for a single table of type fre_pmatch*.
+-C--	      intern__fre__free_pmatch_table  utils.c Deallocate memory for a single table of type fre_pmatch*.
+-C--	      intern__fre__extend_ptable_list utils.c Extend the whole/sub_match array field of the pmatch-table. */
+-C--	      intern__fre__init_head_table    utils.c Initialize the global headnode table.
+-C--	      intern__fre__free_head_table    utils.c Release resources of the global headnode table itself.
+-C--	      intern__fre__init_bound_pos     utils.c Allocate memory for a fre_boundary_pos* object.
+-C--	      intern__fre__free_bound_pos     utils.c Release memory allocated for a single fre_boundary_pos* object. 
 
--CM-	      FRE_PUSH		             utils.c Push a given token on the given tos of the given stack.
-PCM-	      FRE_SKIP_COMMENTS              utils.c Skip commentary in extended Perl-like patterns.
-PCM-	      FRE_CERTIFY_ESC_SEQ            utils.c Verify escape sequences, replacing non-supported for supported constructs.
-PCM-	      FRE_FETCH_MODIFIERS            utils.c Fetches and validate modifiers.
-PCM-	      FRE_HANDLE_BREF                utils.c Registers the position within a pattern of a back-reference.
--CM-	      FRE_EXTEND_BOUND_ARRAY	     utils.c Extend the fre_pattern->bound_pos->[n]boundary_pos array.
--CM-	      FRE_REGISTER_WORD_BOUNDARY     utils.c Registers position within a pattern of a word boundary.
---M-          FRE_CERFITY_WORD_BOUNDARY      utils.c Verify that a word boundary is at the expected position in the match.
--CM-	      FRE_QUOTE_TOKENS               utils.c Handles '\Q...\E' escape sequences.
-PC--	      intern__fre__insert_sm	     utils.c Insert a sub-match inside a pattern.
-PC--	      intern__fre__cut_match	     utils.c Cut a matched sequence of chars from the matched string.
-PC--	      intern__fre__split_pattern     utils.c Strip off a pattern from its Perl-like elements.
--C--	      intern__fre__compile_pattern   utils.c Compile the converted Perl-like pattern.
-PC--	      intern__fre__perl_to_posix     utils.c Convert a stripped-off, perl-like pattern into a POSIX conformant pattern.
+-CM-	      FRE_PUSH		              utils.c Push a given token on the given tos of the given stack.
+PCM-	      FRE_SKIP_COMMENTS               utils.c Skip commentary in extended Perl-like patterns.
+PCM-	      FRE_CERTIFY_ESC_SEQ             utils.c Verify escape sequences, replacing non-supported for supported constructs.
+PCM-	      FRE_FETCH_MODIFIERS             utils.c Fetches and validate modifiers.
+PCM-	      FRE_HANDLE_BREF                 utils.c Registers the position within a pattern of a back-reference.
+PCM-	      FRE_REGISTER_BOUNDARY	      utils.c Replaces a word boundary if it can, else raise the appropriate flag(s).
+-CM-	      FRE_QUOTE_TOKENS                utils.c Handles '\Q...\E' escape sequences.
+PC--	      intern__fre__insert_sm	      utils.c Insert a sub-match inside a pattern.
+PC--	      intern__fre__cut_match	      utils.c Cut a matched sequence of chars from the matched string.
+PC--	      intern__fre__split_pattern      utils.c Strip off a pattern from its Perl-like elements.
+-C--	      intern__fre__compile_pattern    utils.c Compile the converted Perl-like pattern.
+PC--	      intern__fre__perl_to_posix      utils.c Convert a stripped-off, perl-like pattern into a POSIX conformant pattern.
 
--C-I	      intern__fre__fetch_head	     init.c  Used by threads to fetch their own pmatch_table.
-PC--	      intern__fre__pmatch_location   init.c  Returns the address of a per-thread pmatch_table.
-PC--	      intern__fre__lib_init	     init.c  Initializes the library (mostly for pmatch_table).
-PC--	      intern__fre__lib_finit	     init.c  Terminate the library (mostly for pmatch_table).
-PC--	      intern__fre__key_delete	     init.c  Delete the pthread_key_t passed to pthread_key_create. 
+-C-I	      intern__fre__fetch_head	      init.c  Used by threads to fetch their own pmatch_table.
+PC--	      intern__fre__pmatch_location    init.c  Returns the address of a per-thread pmatch_table.
+PC--	      intern__fre__lib_init	      init.c  Initializes the library (mostly for pmatch_table).
+PC--	      intern__fre__lib_finit	      init.c  Terminate the library (mostly for pmatch_table).
+PC--	      intern__fre__key_delete	      init.c  Delete the pthread_key_t passed to pthread_key_create. 
 
-PC--	      intern__fre__plp_parser	     main.c  Parse the given Perl-like pattern.
-PC--	      intern__fre__match_op	     main.c  Execute a matching operation.
-PC--	      intern__fre__substitute_op     main.c  Execute a substitution operation.
--CM-	      FRE_INSERT_DIGIT_RANGE	     main.c  Insert a digit range in pattern.
--CM-	      FRE_INSERT_DASH_RANGE	     main.c  Insert a "dash range" in pattern.
-PC--	      intern__fre__transliterate_op  main.c  Execute a transliteration operation.
+PC--	      intern__fre__plp_parser	      main.c  Parse the given Perl-like pattern.
+PC--	      intern__fre__match_op	      main.c  Execute a matching operation.
+PC--	      intern__fre__substitute_op      main.c  Execute a substitution operation.
+-CM-	      FRE_CANCEL_CUR_MATCH	      main.c  Resets the revelant fields of the ptable to -1.
+PCM-	      FRE_CHECK_BOUNDARY              main.c  Checks positions of a boundary that couldn't be replaced.
+-CM-	      FRE_INSERT_DIGIT_RANGE	      main.c  Insert a digit range in pattern.
+-CM-	      FRE_INSERT_DASH_RANGE	      main.c  Insert a "dash range" in pattern.
+PC--	      intern__fre__transliterate_op   main.c  Execute a transliteration operation.
 
--CM-	      intern__fre__errmesg	     fre_internal.h	Print a debug/error message.
+-CM-	      intern__fre__errmesg	      fre_internal.h	Print a debug/error message.
 
 
 /** Debuging hooks **/
--C--	      print_pattern_hook	     utils.c	        Display content of a fre_pattern object.
--C--	      print_string_hook		     utils.c		Loop over each chars of a string, printing them.
--C--	      print_ptable_hook		     main.c		Display content of pmatch_table's current node.
+-C--	      print_pattern_hook	      utils.c	        Display content of a fre_pattern object.
+-C--	      print_string_hook		      utils.c		Loop over each chars of a string, printing them.
+-C--	      print_ptable_hook		      main.c		Display content of pmatch_table's current node.
 
 
 /** Public API **/

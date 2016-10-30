@@ -240,72 +240,6 @@ void intern__fre__free_bref_arr(fre_backref *to_free)
 } /* intern__fre__free_bref_arr() */
 
 
-/* 
- * Allocate memory for a fre_bound_pos* object that keeps track of 
- * where in pattern a word or non-word boundary is located. 
- */
-fre_bound_pos* intern__fre__init_bound_pos(void)
-{
-  fre_bound_pos *to_init = NULL;
-
-  if ((to_init = malloc(sizeof(fre_bound_pos))) == NULL){
-    intern__fre__errmesg("Malloc");
-    return NULL;
-  }
-  if ((to_init->boundary_pos = malloc(FRE_MAX_WORD_BOUNDARIES * sizeof(int))) == NULL){
-    intern__fre__errmesg("Malloc");
-    goto errjmp;
-  }
-  memset(to_init->boundary_pos, -1, FRE_MAX_WORD_BOUNDARIES);
-  if ((to_init->nboundary_pos = malloc(FRE_MAX_WORD_BOUNDARIES * sizeof(int))) == NULL){
-    intern__fre__errmesg("Malloc");
-    goto errjmp;
-  }
-  memset(to_init->nboundary_pos, -1, FRE_MAX_WORD_BOUNDARIES);
-  to_init->fre_word_bound = false;
-  to_init->fre_nword_bound = false;
-  to_init->bp_count = 0;
-  to_init->nbp_count = 0;
-  to_init->bp_size = FRE_MAX_WORD_BOUNDARIES;
-  to_init->nbp_size = FRE_MAX_WORD_BOUNDARIES;
-
-  return to_init;
-
-
- errjmp:
-  if (to_init){
-    if (to_init->boundary_pos){
-      free(to_init->boundary_pos);
-      to_init->boundary_pos = NULL;
-    }
-    if (to_init->nboundary_pos){
-      free(to_init->nboundary_pos);
-      to_init->nboundary_pos = NULL;
-    }
-    free(to_init);
-    to_init = NULL;
-  }
-  return NULL;
-
-} /* intern__fre__init_bound_pos() */
-
-
-void intern__fre__free_bound_pos(fre_bound_pos *to_free)
-{
-  if (!to_free)
-    return;
-
-  if (to_free->boundary_pos){
-    free(to_free->boundary_pos);
-    to_free->boundary_pos = NULL;
-  }
-  if (to_free->nboundary_pos){
-    free(to_free->nboundary_pos);
-    to_free->nboundary_pos = NULL;
-  }
-  free(to_free);
-  return;
-}
   
 /* 
  * Allocate memory to a fre_smatch structure, 
@@ -452,6 +386,55 @@ void intern__fre__free_pmatch_table(fre_pmatch *to_free)
 
 
 /* 
+ * Extend the Ptable's whole_match list when it's short on free space.
+ * listnum == 0: whole_match list; listnum == 1: sub_match list;
+ */
+int intern__fre__extend_ptable_list(int listnum){
+  fre_smatch **temp = NULL;
+  size_t i = ((listnum) ? fre_pmatch_table->sm_ind : fre_pmatch_table->wm_ind);
+  size_t newsize = ((listnum) ? fre_pmatch_table->sm_size*2 : fre_pmatch_table->wm_size*2);
+  if (listnum){
+    if ((temp = realloc(fre_pmatch_table->sub_match, newsize * sizeof(fre_smatch*))) == NULL){
+      intern__fre__errmesg("Realloc");
+      return FRE_ERROR;
+    }
+  }
+  else{
+    if ((temp = realloc(fre_pmatch_table->whole_match, newsize * sizeof(fre_smatch*))) == NULL){
+      intern__fre__errmesg("Realloc");
+      return FRE_ERROR;
+    }
+  }
+  while (i < newsize)
+    if ((temp[i] = intern__fre__init_smatch()) == NULL){
+      intern__fre__errmesg("Intern__fre__init_smatch");
+      goto errjmp;
+    }
+  if (listnum) {
+    fre_pmatch_table->sub_match = temp;
+    fre_pmatch_table->sm_size = newsize;
+  }
+  else {
+    fre_pmatch_table->whole_match = temp;
+    fre_pmatch_table->wm_size = newsize;
+  }
+  temp = NULL;
+  return FRE_OP_SUCCESSFUL;
+
+ errjmp:
+  if (temp)
+    for (i = 0; i < newsize; i++)
+      if(temp[i]){
+	free(temp[i]);
+	temp[i] = NULL;
+      }
+  return FRE_ERROR;
+
+} /* intern__fre__extend_ptable_list() */
+
+
+
+/* 
  * Initialize a fre_pattern, a structure containing about all
  * the information needed to complete the pattern's requested operation.
  */
@@ -467,10 +450,6 @@ fre_pattern* intern__fre__init_pattern(void)
 
   if ((freg_object->backref_pos = intern__fre__init_bref_arr()) == NULL){
     intern__fre__errmesg("Intern__fre__init_bref_arr");
-    goto errjmp;
-  }
-  if ((freg_object->bound_pos = intern__fre__init_bound_pos()) == NULL){
-    intern__fre__errmesg("Intern__fre__init_bound_pos");
     goto errjmp;
   }
   if ((freg_object->comp_pattern = malloc(sizeof(regex_t))) == NULL){
@@ -511,6 +490,11 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->fre_mod_global = false;
   freg_object->fre_mod_sub_is_regex = false;
   freg_object->fre_p1_compiled = false;
+  freg_object->fre_not_boundary = false;
+  freg_object->fre_match_op_bow = false;
+  freg_object->fre_match_op_eow = false;
+  freg_object->fre_subs_op_bow = false;
+  freg_object->fre_subs_op_eow = false;
   freg_object->fre_paired_delimiters = false;
   freg_object->delimiter = '\0';
   freg_object->c_delimiter = '\0';
@@ -530,10 +514,6 @@ fre_pattern* intern__fre__init_pattern(void)
     if (freg_object->comp_pattern != NULL){
       free(freg_object->comp_pattern);
       freg_object->comp_pattern = NULL;
-    }
-    if (freg_object->bound_pos) {
-      intern__fre__free_bound_pos(freg_object->bound_pos);
-      freg_object->bound_pos = NULL;
     }
     if (freg_object->striped_pattern != NULL){
       for (i = 0; i < 2; i++){
@@ -581,10 +561,6 @@ void intern__fre__free_pattern(fre_pattern *freg_object)
     }
     free(freg_object->comp_pattern);
     freg_object->comp_pattern = NULL;
-  }
-  if (freg_object->bound_pos){
-    intern__fre__free_bound_pos(freg_object->bound_pos);
-    freg_object->bound_pos = NULL;
   }
   if (freg_object->striped_pattern != NULL){
     for (i = 0; i < 2; i++){
@@ -899,43 +875,39 @@ int intern__fre__split_pattern(char *pattern,
 
 } /* intern__fre__split_pattern() */
 
-
-#define FRE_EXTEND_BOUND_ARRAY(array, array_size) do{			\
-    int i = 0, new_size = array_size * 2;				\
-    int *new_array = NULL;						\
-    if ((new_array = realloc(array, new_size * sizeof(int*))) == NULL){	\
-      intern__fre__errmesg("Realloc"); return FRE_ERROR;		\
-    }									\
-    for (i = array_size; i < new_size; i++)				\
-      new_array[i] = -1;						\
-    array = new_array; array_size = new_size;				\
-  } while (0);
-
-  
-
 /* 
- * Register the position of a word/non-word boundary and
- * extend any array that's short on free space.
-
- * Takes the token index of the sequence's leading backslash,
- * a 1 or 0 value indicating whether the sequence is a word or non-word 
- * boundary sequence and the fre_pattern we're working on.
+ * Replaces a word boundary token sequence if we can, else raise
+ * the appropriate fre_pattern flag.
+ 
+ * Takes the fre_pattern, the ->striped_pattern's top of stack, the new pattern _p_t_p() is builing, its top of stack
+ * and lenght, a 0 or 1 value indicating whether this is the matching or substitute pattern and a 0 or 1
+ * value indicating whether it's a word boundary sequence: '\<' '\>' '\b' or a not a word boundary sequence '\B'.
  */
-#define FRE_REGISTER_WORD_BOUNDARY(bound_ind, is_word, bfreg_object) do{ \
-    int *bsize = ((is_word) ? &bfreg_object->bound_pos->bp_size : &bfreg_object->bound_pos->nbp_size); \
-    int *bcount = ((is_word)? &bfreg_object->bound_pos->bp_count : &freg_object->bound_pos->nbp_count);	\
-    if (is_word)	{						\
-      if (*bcount == *bsize)						\
-	FRE_EXTEND_BOUND_ARRAY(bfreg_object->bound_pos->boundary_pos, bfreg_object->bound_pos->bp_size); \
-      bfreg_object->bound_pos->boundary_pos[(*bcount)++] = *bound_ind;	\
+#define FRE_REGISTER_BOUNDARY(freg_objet, spa_tos, new_pat, new_pat_tos, new_pat_len, is_sub, is_word) do{ \
+    size_t i = 0;							\
+    if (spa_tos == 0){							\
+      if (!is_sub) freg_object->fre_match_op_bow = true;		\
+      else freg_object->fre_subs_op_bow = true;				\
+    } else if (spa_tos == (strlen(freg_object->striped_pattern[is_sub])-2)){ \
+      if (!is_sub) freg_object->fre_match_op_eow = true;		\
+      else freg_object->fre_subs_op_eow = true;				\
     }									\
     else {								\
-      if(*bcount == *bsize)						\
-	FRE_EXTEND_BOUND_ARRAY(bfreg_object->bound_pos->nboundary_pos, bfreg_object->bound_pos->nbp_size); \
-      bfreg_object->bound_pos->nboundary_pos[(*bcount)++] = *bound_ind;	\
+      if (is_word){							\
+	if ((*new_pat_len += strlen(FRE_POSIX_NON_WORD_CHAR)+1) >= FRE_MAX_PATTERN_LENGHT){ \
+	  errno = 0; intern__fre__errmesg("Overflow replacing a word boundary sequence"); \
+	  errno = EOVERFLOW; return FRE_ERROR;				\
+	}								\
+	while(FRE_POSIX_NON_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_WORD_CHAR[i++], new_pat, new_pat_tos); \
+      }	else {								\
+	if ((*new_pat_len += strlen(FRE_POSIX_WORD_CHAR)+1) >= FRE_MAX_PATTERN_LENGHT){ \
+	  errno = 0; intern__fre__errmesg("Overflow replacing a word boundary sequence"); \
+	  errno = EOVERFLOW; return FRE_ERROR;				\
+	}								\
+	while (FRE_POSIX_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_WORD_CHAR[i++], new_pat, new_pat_tos); \
+      }									\
     }									\
-  } while(0);
-
+  } while (0);
 
 /*
  * This MACRO is used to verify each escape sequence found in the user's given pattern,
@@ -944,9 +916,9 @@ int intern__fre__split_pattern(char *pattern,
  * the new pattern made by _perl_to_posix, the new pattern's top of stack, the new pattern's
  * current lenght and the fre_pattern object used throughout the library.
  */
-#define FRE_CERTIFY_ESC_SEQ(pattern, token_ind, new_pat, new_pat_tos, new_pat_len, freg_object) do { \
+#define FRE_CERTIFY_ESC_SEQ(is_sub, token_ind, new_pat, new_pat_tos, new_pat_len, freg_object) do { \
     size_t i = 0;							\
-    switch(pattern[*token_ind + 1]){					\
+    switch(freg_object->striped_pattern[is_sub][*token_ind + 1]){	\
     case 'd':								\
       if ((*new_pat_len += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
 	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like digit range '\\d'"); \
@@ -998,18 +970,23 @@ int intern__fre__split_pattern(char *pattern,
       while (FRE_POSIX_NON_SPACE_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_SPACE_CHAR[i++], new_pat, new_pat_tos); \
       *token_ind += 2;							\
       break;								\
-    case 'b':								\
-      FRE_REGISTER_WORD_BOUNDARY(new_pat_tos, 1,freg_object);		\
+    case 'b': /* Fall throught */					\
+    case '<': /* Fall throught */					\
+    case '>':								\
+      FRE_REGISTER_BOUNDARY(freg_object, *token_ind, new_pat,		\
+			    new_pat_tos, new_pat_len, is_sub, 1);	\
       *token_ind += 2;							\
       break;								\
     case 'B':								\
-      FRE_REGISTER_WORD_BOUNDARY(new_pat_tos, 0, freg_object);		\
+      FRE_REGISTER_BOUNDARY(freg_object, *token_ind, new_pat,		\
+			    new_pat_tos, new_pat_len, is_sub, 0);	\
+      freg_object->fre_not_boundary = true;				\
       *token_ind += 2;							\
       break;								\
     default:								\
       /* Assume a supported sequence, push the tokens on the pattern stack. */ \
-      FRE_PUSH(pattern[(*token_ind)++], new_pat, new_pat_tos);		\
-      FRE_PUSH(pattern[(*token_ind)++], new_pat, new_pat_tos);		\
+      FRE_PUSH(freg_object->striped_pattern[is_sub][(*token_ind)++], new_pat, new_pat_tos); \
+      FRE_PUSH(freg_object->striped_pattern[is_sub][(*token_ind)++], new_pat, new_pat_tos); \
       /*(*token_ind) += 2;*/						\
       break;								\
     }									\
@@ -1065,10 +1042,8 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
     }
     /* Handle escape sequences. */
     else if (FRE_TOKEN == '\\') {
-      FRE_CERTIFY_ESC_SEQ(freg_object->striped_pattern[is_sub],
-			  &token_ind, new_pattern,
-			  &new_pattern_tos, &new_pattern_len,
-			  freg_object);
+      FRE_CERTIFY_ESC_SEQ(is_sub, &token_ind, new_pattern, &new_pattern_tos,
+			  &new_pattern_len, freg_object);
       continue;
     }
     /*
@@ -1254,6 +1229,11 @@ void print_pattern_hook(fre_pattern* pat)
 	  ((pat->fre_p1_compiled == true) ? "true" : "false"),
 	  ((pat->fre_paired_delimiters == true) ? "true" : "false"),
 	  pat->delimiter, pat->c_delimiter);
+  fprintf(stderr, "fre_match_op_bow: %s\nfre_match_op_eow: %s\nfre_subs_op_bow: %s\nfre_subs_op_eow: %s\n",
+	  ((pat->fre_match_op_bow == true) ? "true" : "false"),
+	  ((pat->fre_match_op_eow == true) ? "true" : "false"),
+	  ((pat->fre_subs_op_bow == true) ? "true" : "false"),
+	  ((pat->fre_subs_op_eow == true) ? "true" : "false"));
   fprintf(stderr, "Operation type: %s\nfre_match_op_bref %s\nfre_subs_op_bref %s\n",
 	  ((pat->fre_op_flag == NONE) ? "NONE" :
 	   (pat->fre_op_flag == MATCH) ? "MATCH" :
@@ -1275,12 +1255,6 @@ void print_pattern_hook(fre_pattern* pat)
   fprintf(stderr, "\n          \t %-17s:", "sub-match number");
   for (i = 0; i < pat->backref_pos->in_substitute_c; i++)
     fprintf(stderr, "%ld ", pat->backref_pos->s_sm_number[i]);
-  fprintf(stderr, "\nWord boundary positions: ");
-  for (c = 0; c < pat->bound_pos->bp_size && pat->bound_pos->boundary_pos[c] != -1; c++)
-    fprintf(stderr, "%d ", pat->bound_pos->boundary_pos[c]);
-  fprintf(stderr, "\nNon-word boundary positions: ");
-  for(c = 0; c < pat->bound_pos->nbp_size && pat->bound_pos->nboundary_pos[c] != -1; c++)
-    fprintf(stderr, "%d ", pat->bound_pos->nboundary_pos[c]);
   fprintf(stderr,"\ncomp_pattern %s\n",
 	  ((pat->comp_pattern != NULL) ? "Defined" : "NULL"));
   fprintf(stderr, "striped_pattern[0] %s\nstriped_pattern[1] %s\n",
@@ -1291,41 +1265,3 @@ void print_pattern_hook(fre_pattern* pat)
   return;
 }
 
-void print_string_hook(char* s)
-{
-  if (s == NULL)
-    return;
-  else
-    fprintf(stderr, "%s\n", s);
-}
-
-
-
-
-
-
-/* 
- * Gather all pattern modifiers and raise their
- * respective flags in the fre_pattern object. 
- *
- #define FRE_FETCH_MODIFIERS(pattern, freg_object, token_ind) do {	\
- while(pattern[*token_ind] != 0){					\
- switch(pattern[*token_ind]){						\
- case 'g':								\
- freg_object->fre_mod_global = true;  break;				\
- case 'i':								\
- freg_object->fre_mod_icase = true;   break;				\
- case 's':								\
- freg_object->fre_mod_newline = true; break;				\
- case 'm':								\
- freg_object->fre_mod_boleol = true;  break;				\
- case 'x':								\
- freg_object->fre_mod_ext = true;     break;				\
- default:								\
- errno = 0; intern__fre__errmesg("Unknown modifier in pattern");	\
- return FRE_ERROR;							\
- }									\
- (*token_ind)++;							\
- }									\
- } while (0);								\
-*/

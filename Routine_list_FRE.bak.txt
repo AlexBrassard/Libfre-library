@@ -24,8 +24,8 @@ PC--	      intern__fre__init_smatch	      utils.c Allocate memory for a fre_smat
 -C--	      intern__fre__extend_ptable_list utils.c Extend the whole/sub_match array field of the pmatch-table. */
 -C--	      intern__fre__init_head_table    utils.c Initialize the global headnode table.
 -C--	      intern__fre__free_head_table    utils.c Release resources of the global headnode table itself.
--C--	      intern__fre__init_bound_pos     utils.c Allocate memory for a fre_boundary_pos* object.
--C--	      intern__fre__free_bound_pos     utils.c Release memory allocated for a single fre_boundary_pos* object. 
+-C-O	      intern__fre__init_bound_pos     utils.c Allocate memory for a fre_boundary_pos* object.
+-C-O	      intern__fre__free_bound_pos     utils.c Release memory allocated for a single fre_boundary_pos* object. 
 
 -CM-	      FRE_PUSH		              utils.c Push a given token on the given tos of the given stack.
 PCM-	      FRE_SKIP_COMMENTS               utils.c Skip commentary in extended Perl-like patterns.

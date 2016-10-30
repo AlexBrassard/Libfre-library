@@ -172,7 +172,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
 
  */
 
-#define FRE_CHECK_BOUNDARY(freg_object, string, is_sub, ret) do {	\
+#define FRE_CHECK_BOUNDARY(freg_object, string, numof_tokens, is_sub, ret) do {	\
     bool op_bow = ((is_sub) ? freg_object->fre_subs_op_bow : freg_object->fre_match_op_bow); \
     bool op_eow = ((is_sub) ? freg_object->fre_subs_op_eow : freg_object->fre_match_op_eow); \
     if (op_bow == true){						\
@@ -189,8 +189,8 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     }									\
     if (op_eow == true){						\
       /* String's lenght has been checked to be under INT_MAX-1 when entering the library. */ \
-      if (fre_pmatch_table->whole_match[WM_IND]->eo == (int)strlen(string)-1){ \
-	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->eo-(*numof_tokens)+1])) *ret = 0; \
+      if (fre_pmatch_table->whole_match[WM_IND]->eo < (int)strlen(string)-1){ \
+	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->eo-(*numof_tokens)])) *ret = 0; \
 	else *ret = 1;							\
       }									\
       else { *ret = 1;							\
@@ -293,7 +293,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
      */
     if (freg_object->fre_match_op_bow == true || freg_object->fre_match_op_eow == true){
       match_ret = 0;
-      FRE_CHECK_BOUNDARY(freg_object, string, 0, &match_ret);
+      FRE_CHECK_BOUNDARY(freg_object, string, numof_tokens, 0, &match_ret);
       if ((fre_pmatch_table->lastop_retval = match_ret) != FRE_OP_SUCCESSFUL){
 	if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
 				   fre_pmatch_table->whole_match[WM_IND]->bo,

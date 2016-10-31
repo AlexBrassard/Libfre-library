@@ -2,7 +2,7 @@
  *
  *
  *  Libfre's Public Interface.
- *  Version  0.400
+ *  Version  0.600
  *
  *
  */
@@ -14,7 +14,6 @@
 
 #include <fre.h>
 #include "fre_internal.h"
-
 
 
 int fre_bind(char *pattern,       /* The regex pattern. */
@@ -30,12 +29,16 @@ int fre_bind(char *pattern,       /* The regex pattern. */
   fre_pattern *freg_object = NULL;
   int retval = 0;
 
-  if (pattern == NULL
-      || string == NULL){
+  if (!pattern || !string){
     errno = EINVAL;
     return FRE_ERROR;
   }
-  if ((pattern_len = strnlen(pattern, SIZE_MAX - 1)) >= FRE_MAX_PATTERN_LENGHT) {
+  /* 
+   * Make sure both pattern and string fits the library's lenght limits.
+   * If no NUL byte has been found until we reached lib-limit - 1 , fail hard.
+   */
+  pattern_len = strnlen(pattern, FRE_MAX_PATTERN_LENGHT);
+  if (pattern[pattern_len] != '\0') {
     pthread_mutex_lock(&fre_stderr_mutex);
     fprintf(stderr, "Libfre handles pattern no longer than 256 bytes (including the terminating NULL byte)\n\
 This is to keep POSIX conformance.\n\n");
@@ -43,16 +46,23 @@ This is to keep POSIX conformance.\n\n");
     errno = EOVERFLOW;
     return FRE_ERROR;
   }
-  if ((string_len = strnlen(string, SIZE_MAX - 1)) >= FRE_ARG_STRING_MAX_LENGHT) {
+  string_len = strnlen(string, FRE_ARG_STRING_MAX_LENGHT);
+  if (string[string_len] != '\0'){
     pthread_mutex_lock(&fre_stderr_mutex);
-    fprintf(stderr, "Libfre takes input no longer than %d bytes (including the terminating NULL byte).\n \
+    fprintf(stderr, "Libfre takes input no longer than %d bytes (including the terminating NULL byte).\n\
 Fragment or reduce the size of your input.\n\n",
 	    FRE_ARG_STRING_MAX_LENGHT);
     pthread_mutex_unlock(&fre_stderr_mutex);
     errno = EOVERFLOW;
     return FRE_ERROR;
   }
-  if (fre_pmatch_table->ls_pattern != NULL) {
+  /* 
+   * If there's a pattern saved in the pmatch-table and its the
+   * same as the one our caller just passed in, use the fre_pattern
+   * object sitting in the pmatch-table and skip parsing completely.
+   */
+  if (fre_pmatch_table->ls_pattern != NULL
+      && fre_pmatch_table->ls_pattern[0] != '\0') {
     if (strcmp(fre_pmatch_table->ls_pattern, pattern) == 0){
       if (fre_pmatch_table->fre_saved_object == true){
 	freg_object = fre_pmatch_table->ls_object;
@@ -65,6 +75,11 @@ Fragment or reduce the size of your input.\n\n",
     intern__fre__errmesg("_plp_parser: Failed to parse the given pattern");
     return FRE_ERROR;
   }
+  /* 
+   * Save a copy of the caller's pattern and a pointer to the fre_pattern object
+   * given by the _plp_parser in the pmatch-table, in cases where our caller is binding
+   * multiple strings against the same pattern.
+   */
   if (SU_strcpy(fre_pmatch_table->ls_pattern, pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
     intern__fre__errmesg("SU_strcpy");
     return FRE_ERROR;
@@ -77,32 +92,24 @@ Fragment or reduce the size of your input.\n\n",
   switch (freg_object->fre_op_flag){
   case MATCH :
     retval = intern__fre__match_op(string, freg_object, &offset_to_start);
-    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case SUBSTITUTE:
     retval = intern__fre__substitute_op(string, string_size, freg_object, &offset_to_start);
-    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   case TRANSLITERATE:
     retval = intern__fre__transliterate_op(string, string_size, freg_object);
-    print_ptable_hook(); /* WHILE DEBUGING GLOBAL OPERATIONS ONLY */
     break;
   default:
     /* If really we made it all the way here with an invalid operation just abort everything. */
     abort();
   }
+  print_pattern_hook(freg_object); /* DEBUG ONLY */
   intern__fre__free_pattern(freg_object);
   freg_object = NULL;
   /* Check how the operation went. */
   if (retval == FRE_ERROR){
-    intern__fre__errmesg("_op_match: Failed to execute matching operation");
+    intern__fre__errmesg("_op_match: Error executing matching operation");
   }
-  else if(retval == FRE_OP_SUCCESSFUL){
-    puts("MATCH !!");
-  }
-  else if(retval == FRE_OP_UNSUCCESSFUL){
-    puts("No match.");
-  }
-  
+
   return retval;
 }

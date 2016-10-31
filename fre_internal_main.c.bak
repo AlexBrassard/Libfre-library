@@ -1,7 +1,7 @@
 /*
  *
  *  Libfre  -  Main internal functions.
- *  Version:   0.600
+ *  Version:   0.400
  *
  */
 
@@ -107,7 +107,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
    * Strip a pattern from its Perl-like element,
    * split the "matching pattern" and "substitute" pattern (if there's one).
    */
-  if (intern__fre__split_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
+  if (intern__fre__strip_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
     intern__fre__errmesg("Intern__fre__strip_pattern");
     goto errjmp;
   }
@@ -153,92 +153,9 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
 } /* intern__fre__plp_parser() */
 
 
-/* To shorten a little bit my already freaking long variable names: */
+
 #define WM_IND fre_pmatch_table->wm_ind
 #define SM_IND fre_pmatch_table->sm_ind
-
-/* ASCII only! */
-#define FRE_INSERT_DIGIT_RANGE(array, token_ind) do {			\
-    size_t i = 1; /* The zeroth char of FRE_POSIX_DIGIT_RANGE is '[' */	\
-    while (FRE_POSIX_DIGIT_RANGE[i] != ']') {				\
-      array[(*token_ind)++] = FRE_POSIX_DIGIT_RANGE[i++];		\
-    }									\
-  } while (0);
-
-/* 
- * Verify and insert a dash separated range. 
- * A dash separated range may be between any two printable characters,
- * so long as they appear in increasing order. It depends greatly on your locale.
- * Starting at *token_ind, insert the appropriate range in array.
-
- * ASCII only!!!
-*/
-#define FRE_INSERT_DASH_RANGE(array, token_ind, low, high) do {	\
-    int temp = 0;						\
-    int current = low;						\
-    if (low >= high){						\
-      temp = low; low = high; high = temp;			\
-    }								\
-    while (current <= high)					\
-      array[(*token_ind)++] = current++;			\
-  } while (0);
-
-
-/*
- * Takes the fre_pattern we're working on, the caller's string, a 0 or 1 value indicating whether
- * to check on either of the matching and substitute pattern respectively, the number of tokens
- * skipped by previous _cut_match() operations and a pointer to an int 
- * indicating whether we had success or not. 1 all good, -1 error, 0 not a boundary.
- 
- * Note that *ret must be set to 0 if it's 1 and 1 if it's 0 once the checks are made
- * in cases when a not-a-word boundary \B is used. 
- */
-
-#define FRE_CHECK_BOUNDARY(freg_object, string, numof_tokens, is_sub, ret) do {	\
-    bool op_bow = ((is_sub) ? freg_object->fre_subs_op_bow : freg_object->fre_match_op_bow); \
-    bool op_eow = ((is_sub) ? freg_object->fre_subs_op_eow : freg_object->fre_match_op_eow); \
-    if (op_bow == true){						\
-      if (fre_pmatch_table->whole_match[WM_IND]->bo > 0){		\
-	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->bo-(*numof_tokens)-1])) *ret = 0; \
-	else *ret = 1;							\
-      }									\
-      else { *ret = 1;							\
-      }									\
-      /* Inverse resuls of previous op if the boundary sequence is '\B' */ \
-      if (freg_object->fre_not_boundary == true){			\
-	if (*ret) *ret = 0; else *ret = 1;				\
-      }									\
-    }									\
-    if (op_eow == true){						\
-      /* String's lenght has been checked to be under INT_MAX-1 when entering the library. */ \
-      if (fre_pmatch_table->whole_match[WM_IND]->eo < (int)strlen(string)-1){ \
-	if (isalpha(string[fre_pmatch_table->whole_match[WM_IND]->eo-(*numof_tokens)])) *ret = 0; \
-	else *ret = 1;							\
-      }									\
-      else { *ret = 1;							\
-      }									\
-      /* Inverse resuls of previous op if the boundary sequence is '\B' */ \
-      if (freg_object->fre_not_boundary == true){			\
-	if (*ret) *ret = 0; else *ret = 1;				\
-      }									\
-    }									\
-  } while(0);
-
-/* 
- * Reset the ptable's ->whole_match[WM_IND] field and all it's corresponding
- * sub-matches to -1.
- */
-#define FRE_CANCEL_CUR_MATCH() do {			\
-    int i = 0;						\
-    fre_pmatch_table->whole_match[WM_IND]->bo = -1;	\
-    fre_pmatch_table->whole_match[WM_IND]->eo = -1;	\
-    while(i++ < fre_pmatch_table->subm_per_match){	\
-      fre_pmatch_table->sub_match[SM_IND]->bo = -1;	\
-      fre_pmatch_table->sub_match[SM_IND]->eo = -1;	\
-      if (SM_IND > 0) --SM_IND;				\
-    }							\
-  } while(0);
-
 
 int intern__fre__match_op(char *string,                  /* The string to bind the pattern against. */
 			  fre_pattern *freg_object,      /* The information gathered by the _plp_parser(). */
@@ -285,51 +202,45 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	++reg_c;
 	/* Extend the sub-match list if needed. */
 	if (++SM_IND >= fre_pmatch_table->sm_size){
-	  /* 0 == whole_match list, 1 == sub_match list. */
-	  if (intern__fre__extend_ptable_list(1) == FRE_ERROR){
-	    intern__fre__errmesg("Intern__fre__extend_ptable_list");
+	  int new_size = 0;
+	  if (fre_pmatch_table->sm_size * 2 > INT_MAX -1) {
+	    errno = EOVERFLOW;
 	    goto errjmp;
 	  }
-	}
+	  new_size = (int)fre_pmatch_table->sm_size * 2;
+
+
+	  if ((stemp = realloc(fre_pmatch_table->sub_match, new_size * sizeof(fre_smatch*))) == NULL){
+	    intern__fre__errmesg("Realloc");
+	    goto errjmp;
+	  }
+	  for (i = SM_IND; i < new_size; i++)
+	    if ((stemp[i] = intern__fre__init_smatch()) == NULL){
+	      intern__fre__errmesg("Intern__fre__init_smatch");
+	      goto errjmp;
+	    }
+	  fre_pmatch_table->sub_match = stemp;
+	  fre_pmatch_table->sm_size = new_size;
+	  stemp = NULL;
+	}	
       }
     }
     else {
       /* 
        * If the match is considered successful but regmatch[0] 
        * contains only -1s, we've got a problem. 
-       * Long way of saying it can never happen or chaos and darkness will follow. 
+       * Long was of saying it can never happen or chaos and darkness will follow. 
        */
       errno = 0;
       intern__fre__errmesg("No valid positions in regmatch array element 0.");
       errno = ENODATA;
       goto errjmp;
     }
-    /*The number of sub-matches per matches. */
-    fre_pmatch_table->subm_per_match = reg_c - 1;
-
-    /* 
-     * Check for the presence of word boundaries now. 
-     * Not sure yet where exactly to check boundaries in a substitute pattern.
-     (I was wrong, substitute pattern MUST not be modified !).
+    /*
+     * The number of sub-matches per matches.
+     * -2: regmatch[0] is the whole match, reg_c always ends at regmatch[last+1]. <- not anymore no.
      */
-    if (freg_object->fre_match_op_bow == true || freg_object->fre_match_op_eow == true){
-      match_ret = 0;
-      FRE_CHECK_BOUNDARY(freg_object, string, numof_tokens, 0, &match_ret);
-      if ((fre_pmatch_table->lastop_retval = match_ret) != FRE_OP_SUCCESSFUL){
-	if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
-				   fre_pmatch_table->whole_match[WM_IND]->bo,
-				   fre_pmatch_table->whole_match[WM_IND]->eo) == NULL){
-	  intern__fre__errmesg("Intern__fre__cut_match");
-	  goto errjmp;
-	}
-	/* Clear the current, unsuccessful match position from the pmatch_table. */
-	FRE_CANCEL_CUR_MATCH();
-	if (intern__fre__match_op(string_copy, freg_object, numof_tokens) == FRE_ERROR){
-	  intern__fre__errmesg("Intern__fre__match_op");
-	  goto errjmp;
-	}
-      }
-    }
+    fre_pmatch_table->subm_per_match = reg_c - 1;
     
     if (freg_object->fre_match_op_bref == true){
       SM_IND -= fre_pmatch_table->subm_per_match;
@@ -353,16 +264,39 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       }
       else {
 	fre_pmatch_table->lastop_retval = FRE_OP_UNSUCCESSFUL;
-	/* Resets revelant fields of the ptable to -1. */
-	FRE_CANCEL_CUR_MATCH();
+	fre_pmatch_table->whole_match[WM_IND]->bo = -1;
+	fre_pmatch_table->whole_match[WM_IND]->eo = -1;
+	i = 0;
+	/* Might be an off by 1 error here look further. */
+	while (i++ < fre_pmatch_table->subm_per_match){
+	  fre_pmatch_table->sub_match[SM_IND]->bo = -1;
+	  fre_pmatch_table->sub_match[SM_IND]->eo = -1;
+	  if (SM_IND != 0) --SM_IND;
+	}
       }
     }
     /* Extend the ->whole_match list if needed. */
-    if (++WM_IND >= fre_pmatch_table->wm_size)
-      if (intern__fre__extend_ptable_list(0) == FRE_ERROR){
-	intern__fre__errmesg("Intern__fre__extend_ptable_list");
+    if (++WM_IND >= fre_pmatch_table->wm_size){
+      int new_size = 0;
+      if (fre_pmatch_table->wm_size * 2 > INT_MAX -1) {
+	errno = EOVERFLOW;
 	goto errjmp;
       }
+      new_size = (int)fre_pmatch_table->wm_size * 2;
+      
+      if ((wtemp = realloc(fre_pmatch_table->whole_match, new_size * sizeof(fre_smatch*))) == NULL){
+	intern__fre__errmesg("Realloc");
+	goto errjmp;
+      }
+      for (i = WM_IND; i < new_size; i++)
+	if ((wtemp[i] = intern__fre__init_smatch()) == NULL){
+	  intern__fre__errmesg("Intern__fre__init_smatch");
+	  goto errjmp;
+	}
+      fre_pmatch_table->wm_size = new_size;
+      fre_pmatch_table->whole_match = wtemp;
+      wtemp = NULL;
+    }
     /* Handle global operations. */
     if (freg_object->fre_mod_global == true){
       if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
@@ -482,7 +416,7 @@ int intern__fre__substitute_op(char *string,
     while (string_copy[string_ind] != '\0'
 	   && fre_pmatch_table->whole_match[WM_IND]->bo != -1){
       /* 
-       * Add the sum of all replacement string and sub the number of tokens removed from the caller's
+       * Add the sum of all replacement string - the number of tokens removed from the caller's
        * string to the index in ptable->wm->bo to find where in the modified string this index is at. 
        */
       if (string_ind == fre_pmatch_table->whole_match[WM_IND]->bo - sumof_tokens + sumof_lenghts){
@@ -500,6 +434,12 @@ int intern__fre__substitute_op(char *string,
 	    intern__fre__errmesg("SU_strcpy");
 	    goto errjmp;
 	  }
+	  /*if (sumof_tokens < 0) {
+	    errno = 0;
+	    intern__fre__errmesg("Integer cannot be safely cast to size_t");
+	    errno = EINVAL;
+	    goto errjmp;
+	    }*/
 	  if ((replacement_len = intern__fre__insert_sm(freg_object, string_copy,
 							sumof_tokens, 1)) == FRE_ERROR){
 	    intern__fre__errmesg("Intern__fre__insert_sm");
@@ -512,6 +452,7 @@ int intern__fre__substitute_op(char *string,
 	     sp_ind++)
 	  new_string[ns_ind++] = freg_object->striped_pattern[1][sp_ind];
 	++WM_IND; /* Get next match positions. */
+	/*	while (string_ind++ < fre_pmatch_table->whole_match[WM_IND]->eo - sumof_tokens + sumof_lenghts) ;*/
       }
       else {
 	new_string[ns_ind++] = string_copy[string_ind++];
@@ -529,14 +470,7 @@ int intern__fre__substitute_op(char *string,
     intern__fre__errmesg("SU_strcpy");
     goto errjmp;
   }
-  if (new_string){
-    free(new_string);
-    new_string = NULL;
-  }
-  if (string_copy){
-    free(string_copy);
-    string_copy = NULL;
-  }
+
   return FRE_OP_SUCCESSFUL;
 
  errjmp:
@@ -557,7 +491,33 @@ int intern__fre__substitute_op(char *string,
   
 
 
+#define FRE_INSERT_DIGIT_RANGE(array, token_ind) do {			\
+    size_t i = 1; /* The zeroth char of FRE_POSIX_DIGIT_RANGE is '[' */	\
+    while (FRE_POSIX_DIGIT_RANGE[i] != ']') {				\
+      array[(*token_ind)++] = FRE_POSIX_DIGIT_RANGE[i++];		\
+    }									\
+  } while (0);
 
+/* 
+ * Verify and insert a dash separated range. 
+ * A dash separated range may be between any two printable characters,
+ * so long as they appear in increasing order. It depends greatly on your locale.
+ * Starting at *token_ind, insert the appropriate range in array.
+
+ * ASCII only!!!
+*/
+void FRE_INSERT_DASH_RANGE(char *array, size_t *token_ind, int low, int high)
+{
+  do {
+    int temp = 0;
+    int current = low;
+    if (low >= high){
+      temp = low; low = high; high = temp;
+    }
+    while (current <= high)
+      array[(*token_ind)++] = current++;
+  } while (0);
+}
 
 /* Execute a transliteration operation (paired-character substitution). */
 int intern__fre__transliterate_op(char *string,

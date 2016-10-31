@@ -1,7 +1,7 @@
 /*
  *
  *  Libfre library  -  Internal header file.
- *  Version   0.600
+ *  Version   0.400
  *
  */
 
@@ -78,13 +78,6 @@ typedef struct fpattern {
   /* Indicate whether or not to regfree() the pattern. */
   bool                  fre_p1_compiled;        /* True when stripped_pattern[0] has been regcomp()'d. */
 
-  /* Word boundaries. */
-  bool                  fre_not_boundary;       /* True when the sequence is 'not a word boundary \B'. */
-  bool                  fre_match_op_bow;       /* True when a begining of word sequence is found in a matching pattern. */
-  bool                  fre_match_op_eow;       /* True when an ending of word sequence is found in a matching pattern. */
-  bool                  fre_subs_op_bow;        /* True when a begining of word sequence is found in a substitute pattern. */
-  bool                  fre_subs_op_eow;        /* True when an ending of word sequence is found in a substitute pattern. */
-  
   /* Pattern's delimiter(s) */
   bool                  fre_paired_delimiters;  /* True when delimiter is one of  { ( [ <  */
   char                  delimiter;              /* The delimiter used in the pattern. */
@@ -98,6 +91,9 @@ typedef struct fpattern {
   bool                  fre_subs_op_bref;       /* True when back-reference(s) are found in the substitute pattern. */
   fre_backref           *backref_pos;           /* Contains positions of back-references, when fre_op_bref is true. */
   
+  /* Pointer to the operation to be executed, determined by the fre_op_flag. */
+  int      (*operation)(struct fpattern*, char*); /* mostly obsolete <---------- */
+
   /* Patterns */
   regex_t               *comp_pattern;         /* The compiled regex pattern. */
   char                  **striped_pattern;     /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
@@ -141,9 +137,7 @@ typedef struct fre_head_tab {
 
 
 /** Constants **/
-#ifndef ENODATA
-# define ENODATA                       62      /* Not defined on BSD */
-#endif
+
 # define FRE_MAX_PATTERN_LENGHT        256     /* 256 to keep our POSIX conformance. */
 # define FRE_EXPECTED_M_OP_DELIMITER   2       /* Number of expected delimiters for a match op pattern. */
 # define FRE_EXPECTED_ST_OP_DELIMITER  3       /* Number of expected delimiters for subs. and trans. op patterns. */
@@ -156,20 +150,17 @@ typedef struct fre_head_tab {
 
 /* 
  * Successful is set to 1, it makes for prettier 'if' statements. 
- * Ex:     if (fre_bind(pattern, string, str_size)) puts("Matched!");
+ * Ex: if (fre_bind(pattern,string)) { puts("Matched!"); }
  */
 # define FRE_OP_SUCCESSFUL             1       /* Indicate a successful operation. */
 # define FRE_OP_UNSUCCESSFUL           0       /* Indicate an unsuccessful operation. */
 # define FRE_ERROR                    -1       /* Indicate an error. */
 
-static const char FRE_PAIRED_O_DELIMITERS[]   = "<({[";          /* Opening paired-type delimiters. */
-static const char FRE_PAIRED_C_DELIMITERS[]   = ">)}]";          /* Closing paired-type delimiters. */
-static const char FRE_POSIX_DIGIT_RANGE[]     = "[[:digit:]]";   /* Used to replace '\d' escape sequence. */
-static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^[:digit:]]";  /* Used to replace '\D' escape sequence. */
-static const char FRE_POSIX_WORD_CHAR[]       = "[_[:alpha:]]";  /* Used to replace '\w' escape sequence. */
-static const char FRE_POSIX_NON_WORD_CHAR[]   = "[^_[:alpha:]]"; /* Used to replace '\W' escape sequence. */
-static const char FRE_POSIX_SPACE_CHAR[]      = "[[:space:]]";   /* Used to replace '\s' escape sequence. */
-static const char FRE_POSIX_NON_SPACE_CHAR[]  = "[^[:space:]]";  /* Used to replace '\S' escape sequence. */
+static const char FRE_PAIRED_O_DELIMITERS[]   = "<({[";   /* Opening paired-type delimiters. */
+static const char FRE_PAIRED_C_DELIMITERS[]   = ">)}]";   /* Closing paired-type delimiters. */
+static const char FRE_POSIX_DIGIT_RANGE[]     = "[0123456789]";  /* Used mostly to replace '\d' escape sequence. */
+static const char FRE_POSIX_NON_DIGIT_RANGE[] = "[^0123456789]"; /* Used mostly to replace '\D' escape sequence. */
+
 extern fre_headnodes *fre_headnode_table;                 /* Global table of linked-lists headnodes, use with care. */
 
 /* Simple error message. */
@@ -204,7 +195,6 @@ void           intern__fre__free_bref_arr(fre_backref *to_free);     /* Free res
 fre_smatch*    intern__fre__init_smatch(void);                       /* Allocate memory to a fre_smatch object. */
 fre_pmatch*    intern__fre__init_pmatch_table(void);
 void           intern__fre__free_pmatch_table(fre_pmatch *node);
-int            intern__fre__extend_ptable_list(int listnum);         /* Extend a pmatch-table's whole/sub_match field. */
 fre_pattern*   intern__fre__init_pattern(void);                      /* Initialize a fre_pattern object. */
 void           intern__fre__free_pattern(fre_pattern *freg_object);  /* Release resources of a fre_pattern object */
 fre_headnodes* intern__fre__init_head_table(void);                   /* Init the global table of headnode pointers. */
@@ -250,7 +240,7 @@ int FRE_SKIP_COMMENTS(char *pattern,
 /** Regex Parser utility routines. **/
 
 fre_pattern* intern__fre__plp_parser(char *pattern);               /* The Perl-like Pattern Parser. */
-int          intern__fre__split_pattern(char * pattern,            /* Strip a pattern from its Perl-like elements. */
+int          intern__fre__strip_pattern(char * pattern,            /* Strip a pattern from its Perl-like elements. */
 					fre_pattern *freg_object,
 					size_t token_ind);
 int          intern__fre__perl_to_posix(fre_pattern *freg_object, /* Convert Perl-like constructs into POSIX constructs. */

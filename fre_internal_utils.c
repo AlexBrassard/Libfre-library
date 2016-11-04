@@ -787,7 +787,7 @@ int intern__fre__split_pattern(char *pattern,
 
     /* Handle some escape sequences here (instead of protecting them so they reach _perl_to_posix()) */
     if (FRE_TOKEN == '\\') {
-      if (pattern[token_ind+1] == 'Q'){
+      if (pattern[token_ind+1] == 'Q'&& spa_ind == 0){
 	FRE_QUOTE_TOKENS(freg_object, pattern, &token_ind,
 			 &spa_tos, strlen(freg_object->striped_pattern[spa_ind]));
       }
@@ -1036,6 +1036,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
       numof_tokens = 1;
       continue;
     }
+    else if (is_sub == 1) goto push_token;
     /* Handle escape sequences. */
     else if (FRE_TOKEN == '\\') {
       FRE_CERTIFY_ESC_SEQ(is_sub, &token_ind, new_pattern, &new_pattern_tos,
@@ -1045,12 +1046,12 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
     /*
      * When the _sub_is_regex flag is false, 
      * never go further with a substitute pattern. 
-     */
+     
     if (freg_object->fre_mod_sub_is_regex == false && is_sub == 1) {
       FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
       ++token_ind;
       continue;
-    }
+      }*/
     /* Handle comments. */
     if (freg_object->fre_mod_ext == true) {
       if (isspace(FRE_TOKEN)) {
@@ -1069,7 +1070,8 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
       }
     }
     /* Just a regular token. */
-    else { 
+    else {
+    push_token:
       FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
     }
     
@@ -1110,7 +1112,8 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
    * number of sub-matches.
    */
   while (sp_ind < FRE_MAX_PATTERN_LENGHT) {
-    long subm_ind = ((!is_sub)? freg_object->backref_pos->p_sm_number[sm_count] : freg_object->backref_pos->s_sm_number[sm_count]);
+    long subm_ind = ((!is_sub)? freg_object->backref_pos->p_sm_number[sm_count]
+		     : freg_object->backref_pos->s_sm_number[sm_count]);
     if (in_array[in_array_ind] == -1) break;
     if (in_array_ind != 0)
       next_elem_pos = in_array[in_array_ind];
@@ -1126,7 +1129,7 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
       ++in_array_ind; /* Get next backref position. */
     }
     else if (freg_object->striped_pattern[is_sub][sp_ind] == '\0'
-	     && sp_ind < first_elem_pos + next_elem_pos){
+	     && sp_ind < (first_elem_pos + next_elem_pos)){
       ++sp_ind;
       continue;
     }
@@ -1135,7 +1138,7 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
 
   /* Make sure we forget no characters in ->striped_pattern[]. */
   while(freg_object->striped_pattern[is_sub][sp_ind] != '\0')
-    new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind];
+    new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
   new_pattern[np_ind] = '\0';
 
   if (SU_strcpy(freg_object->striped_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){

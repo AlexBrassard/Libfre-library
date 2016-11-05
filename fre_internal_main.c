@@ -241,14 +241,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
 
 #define FRE_CANCEL_ALL_MATCH() do {				\
     while(1) {							\
-      int i = 0;						\
-      fre_pmatch_table->whole_match[WM_IND]->bo = -1;		\
-      fre_pmatch_table->whole_match[WM_IND]->eo = -1;		\
-      while(i++ < fre_pmatch_table->subm_per_match){		\
-	fre_pmatch_table->sub_match[SM_IND]->bo = -1;		\
-	fre_pmatch_table->sub_match[SM_IND]->eo = -1;		\
-	if (SM_IND > 0) --SM_IND;				\
-      }								\
+      FRE_CANCEL_CUR_MATCH();					\
       if (WM_IND > 0) --WM_IND;					\
       else break;						\
     }								\

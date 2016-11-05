@@ -994,6 +994,8 @@ int intern__fre__split_pattern(char *pattern,
  */
 int intern__fre__perl_to_posix(fre_pattern *freg_object,
 			       size_t is_sub){
+  size_t in_bracket_exp = 0;          /* ++ each time we find a '[', -- each time we find  a ']'. */
+  size_t in_bracket_count = 0;        /* Some meta-chars must be at a specific position in a bracket expression to be valid. */
   size_t numof_tokens = 0;            /* Used to help register back-reference positions. */
   size_t token_ind = 0;
   size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */
@@ -1012,13 +1014,38 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
   memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
   while (1){
     if (FRE_TOKEN == '\0'){
+      if (in_bracket_exp > 0) {
+	errno = 0; intern__fre__errmesg("Unterminated '[' or '[^' expression");
+	errno = ENODATA;
+	return FRE_ERROR;
+      }
       FRE_PUSH('\0', new_pattern, &new_pattern_tos);
       break;
     }
     ++numof_tokens;
+
+    if (FRE_TOKEN == '[') in_bracket_exp++;
+    else if (FRE_TOKEN == ']') {
+      /* 
+       * Directly push the token on the new_pattern's stack if it's not in a bracket expression or
+       * if a closing bracket is the first character after the leading bracket or
+       * the second char after the leading bracket if the first char is a caret.
+       */
+      if ((in_bracket_exp == 0)
+	  || (in_bracket_count == 0)
+	  || (in_bracket_count == 1 && freg_object->striped_pattern[is_sub][token_ind-1] == '^'))
+	goto push_token;
+      else {
+	if (--in_bracket_exp == 0) {
+	  in_bracket_count = 0;
+	}
+      }
+    }
+    if (in_bracket_exp > 0) in_bracket_count++;
     /* Handle backreferences. */
     if ((FRE_TOKEN == '\\' || FRE_TOKEN == '$')
-	&& (isdigit(freg_object->striped_pattern[is_sub][token_ind +1]))){
+	&& (isdigit(freg_object->striped_pattern[is_sub][token_ind +1]))
+	&& in_bracket_exp == 0){
       --numof_tokens;
       if (is_sub){
 	/* Conditional expression is useless, numof_tokens == new_pattern_tos when substitute_c == 0 */
@@ -1038,7 +1065,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
     }
     else if (is_sub == 1) goto push_token;
     /* Handle escape sequences. */
-    else if (FRE_TOKEN == '\\') {
+    else if (FRE_TOKEN == '\\' && in_bracket_exp == 0) {
       FRE_CERTIFY_ESC_SEQ(is_sub, &token_ind, new_pattern, &new_pattern_tos,
 			  &new_pattern_len, freg_object);
       continue;
@@ -1053,7 +1080,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
       continue;
       }*/
     /* Handle comments. */
-    if (freg_object->fre_mod_ext == true) {
+    if (freg_object->fre_mod_ext == true && in_bracket_exp == 0) {
       if (isspace(FRE_TOKEN)) {
 	while(isspace(FRE_TOKEN)) ++token_ind;
 	continue; /* Must avoid incrementing token_ind once more. */
@@ -1156,12 +1183,7 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
 /*
  * Remove a character sequence from a NUL terminated string. 
  * No error checks are made. 
- * Self warning >>> Possible comparaison againt signed vs unsigned int. <<<
-
- Add a parameter: numof_token_skipped. Then modify _match_op() to add this 
- offset to each match/sub-match position. this should fix the current
- position misalignment (or whatever it's called :) 
-
+ * Self warning >>> Possible comparaison agaisnt signed vs unsigned int. <<<
  */
 char* intern__fre__cut_match(char *string,
 			     size_t *numof_tokens_skiped, /* Number of tokens skiped by cut_match. */
@@ -1206,6 +1228,7 @@ char* intern__fre__cut_match(char *string,
 /* 
  * Debug hook
  * Print all values of a given fre_pattern object.
+ * Vulnerable to 'use of uninitialized value', do NOT use in production code.
  */
 void print_pattern_hook(fre_pattern* pat)
 {

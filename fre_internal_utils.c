@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #include "fre_internal.h"
+#include "fre_internal_macros.h"
 
 extern fre_headnodes *fre_headnode_table;
 
@@ -603,46 +604,32 @@ int intern__fre__compile_pattern(fre_pattern *freg_object)
   return FRE_OP_SUCCESSFUL;
 }
 
-/** Regex Parser Utility Functions. **/
 
-/*
- * MACRO - Add current token to the given stack and
- * update the given stack's TOS.
- * Really isn't needed but it did make it easier on my brain when designing the library.
- */
-#define FRE_PUSH(token, stack, tos) do {		\
-    stack[*tos] = token;				\
-    ++(*tos);						\
-  } while (0) ;
+
+/** Regex Parser Utility Functions. **/
 
 
 
 /* Skip commentary tokens and adjust the pattern lenght afterward. */
-int FRE_SKIP_COMMENTS(char *pattern,
-		      size_t *pattern_len,
-		      size_t *token_ind)
-{
-  size_t i = 0;							
-  while((pattern[*token_ind] != '\n')					
-	&& (pattern[*token_ind] != '\0')) {				
-    ++(*token_ind);
-    ++i;						
-  }
-  /* Adjust the pattern's lenght and check for overflow. */
-  if (((*pattern_len) - i > 0)					
-      && ((*pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		
-    (*pattern_len) -= i;						
-  } else {								
-    errno = 0;
-    intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); 
-    errno = EOVERFLOW;
-    return FRE_ERROR;				
-  }
-  return FRE_OP_SUCCESSFUL;
-} 
+#define FRE_SKIP_COMMENTS(pattern, new_pattern_len, token_ind)  do {	\
+    size_t i = 0;							\
+    while(pattern[*token_ind] != '\0') {				\
+      if (pattern[*token_ind] == '\n') break;				\
+      ++(*token_ind);							\
+      ++i;								\
+    }									\
+    /* Adjust the pattern's lenght and check for overflow. */		\
+    if (((*new_pattern_len) - i > 0)					\
+	&& ((*new_pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		\
+      (*new_pattern_len) -= i;						\
+    } else {								\
+      errno = 0;							\
+      intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); \
+      errno = EOVERFLOW;						\
+    }									\
+  }while (0);
 
-
-
+/* Fetch a user's pattern modifier(s). */
 int FRE_FETCH_MODIFIERS(char *pattern,
 			fre_pattern *freg_object,
 			size_t *token_ind)
@@ -674,6 +661,11 @@ int FRE_FETCH_MODIFIERS(char *pattern,
   return FRE_OP_SUCCESSFUL;
 }
 
+
+/* 
+ * Registers a backreference's position within the pattern it's been found
+ * and also registers its real backreference number (the one found after the '\' or '$').
+ */
 int FRE_HANDLE_BREF(char *pattern,
 		    size_t *token_ind,
 		    size_t sub_match_ind,
@@ -717,6 +709,8 @@ int FRE_HANDLE_BREF(char *pattern,
  * begining the \Q... sequence, the pattern being built is qfreg_object->striped_pattern[0]
  * (freg_object->striped_pattern[1] isn't allowed to reach that far in perl_to_posix)
  * the new pattern's top of stack and lenght.
+
+ * Make careful use of this MACRO since it may returns an integer.
  */
 #define FRE_QUOTE_TOKENS(qfreg_object, qpattern, qtoken_ind, qnew_pat_tos, qnew_pat_len) do { \
     size_t new_pat_len = qnew_pat_len;					\
@@ -878,6 +872,8 @@ int intern__fre__split_pattern(char *pattern,
  * Takes the fre_pattern, the ->striped_pattern's top of stack, the new pattern _p_t_p() is builing, its top of stack
  * and lenght, a 0 or 1 value indicating whether this is the matching or substitute pattern and a 0 or 1
  * value indicating whether it's a word boundary sequence: '\<' '\>' '\b' or a not a word boundary sequence '\B'.
+
+ * This MACRO might return an integer, careful about using it elsewhere than _perl_to_posix().
  */
 #define FRE_REGISTER_BOUNDARY(freg_objet, spa_tos, new_pat, new_pat_tos, new_pat_len, is_sub, is_word) do{ \
     size_t i = 0;							\
@@ -911,6 +907,8 @@ int intern__fre__split_pattern(char *pattern,
  * Takes the parsed pattern, the token index of the backslash leading the escape sequence,
  * the new pattern made by _perl_to_posix, the new pattern's top of stack, the new pattern's
  * current lenght and the fre_pattern object used throughout the library.
+
+ * This MACRO returns an integer, careful about using it elsewhere than _perl_to_posix()!
  */
 #define FRE_CERTIFY_ESC_SEQ(is_sub, token_ind, new_pat, new_pat_tos, new_pat_len, freg_object) do { \
     size_t i = 0;							\
@@ -1063,6 +1061,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
       numof_tokens = 1;
       continue;
     }
+    /* Never go any further with a subtitute pattern. */
     else if (is_sub == 1) goto push_token;
     /* Handle escape sequences. */
     else if (FRE_TOKEN == '\\' && in_bracket_exp == 0) {
@@ -1070,15 +1069,6 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 			  &new_pattern_len, freg_object);
       continue;
     }
-    /*
-     * When the _sub_is_regex flag is false, 
-     * never go further with a substitute pattern. 
-     
-    if (freg_object->fre_mod_sub_is_regex == false && is_sub == 1) {
-      FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
-      ++token_ind;
-      continue;
-      }*/
     /* Handle comments. */
     if (freg_object->fre_mod_ext == true && in_bracket_exp == 0) {
       if (isspace(FRE_TOKEN)) {
@@ -1086,10 +1076,10 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 	continue; /* Must avoid incrementing token_ind once more. */
       }
       if (FRE_TOKEN == '#') {
-	/* This condition will be replaced by: if (errno), after the call,  when the function is changed in a MACRO. */
-	if (FRE_SKIP_COMMENTS(freg_object->striped_pattern[is_sub],
-			      &new_pattern_len,
-			      &token_ind) != FRE_OP_SUCCESSFUL){
+	FRE_SKIP_COMMENTS(freg_object->striped_pattern[is_sub],
+			  &new_pattern_len,
+			  &token_ind);
+	if (errno){
 	  intern__fre__errmesg("Fre_skip_comments");
 	  return FRE_ERROR;
 	}
@@ -1097,10 +1087,8 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
       }
     }
     /* Just a regular token. */
-    else {
     push_token:
-      FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
-    }
+    FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
     
     ++token_ind; /* Get next token. */
   }

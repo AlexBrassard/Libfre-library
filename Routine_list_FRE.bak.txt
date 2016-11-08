@@ -24,14 +24,12 @@ PC--	      intern__fre__init_smatch	      utils.c Allocate memory for a fre_smat
 -C--	      intern__fre__extend_ptable_list utils.c Extend the whole/sub_match array field of the pmatch-table. */
 -C--	      intern__fre__init_head_table    utils.c Initialize the global headnode table.
 -C--	      intern__fre__free_head_table    utils.c Release resources of the global headnode table itself.
--C-O	      intern__fre__init_bound_pos     utils.c Allocate memory for a fre_boundary_pos* object.
--C-O	      intern__fre__free_bound_pos     utils.c Release memory allocated for a single fre_boundary_pos* object. 
 
 -CM-	      FRE_PUSH		              utils.c Push a given token on the given tos of the given stack.
-PCM-	      FRE_SKIP_COMMENTS               utils.c Skip commentary in extended Perl-like patterns.
-PCM-	      FRE_CERTIFY_ESC_SEQ             utils.c Verify escape sequences, replacing non-supported for supported constructs.
-PCM-	      FRE_FETCH_MODIFIERS             utils.c Fetches and validate modifiers.
-PCM-	      FRE_HANDLE_BREF                 utils.c Registers the position within a pattern of a back-reference.
+PCM-*	      FRE_SKIP_COMMENTS               utils.c Skip commentary in extended Perl-like patterns.
+PCM-*	      FRE_CERTIFY_ESC_SEQ             utils.c Verify escape sequences, replacing non-supported for supported constructs.
+PCM-*	      FRE_FETCH_MODIFIERS             utils.c Fetches and validate modifiers.
+PCM-*	      FRE_HANDLE_BREF                 utils.c Registers the position within a pattern of a back-reference.
 PCM-	      FRE_REGISTER_BOUNDARY	      utils.c Replaces a word boundary if it can, else raise the appropriate flag(s).
 -CM-	      FRE_QUOTE_TOKENS                utils.c Handles '\Q...\E' escape sequences.
 PC--	      intern__fre__insert_sm	      utils.c Insert a sub-match inside a pattern.
@@ -68,6 +66,12 @@ PC--	      intern__fre__transliterate_op   main.c  Execute a transliteration ope
 PC--	      fre_bind			             Binds pattern to string and execute pattern's operation. 
 
 
+
+
+* If currently a function, then will become a MACRO.
+
+
+
 *********
 * Notes *
 *********
@@ -80,9 +84,11 @@ P--O**	      intern__fre__free_smatch	     utils.c Deallocate memory for a fre_s
 P--O	      intern__fre__set_headnode	     init.c  Called by pthread once
 -C-O	      intern__fre__init_ptable	     utils.c Allocate memory for a complete pmatch_table linked-list.
 PC-O	      intern__fre__free_ptable       utils.c Deallocate memory for each nodes of the global pmatch_table.
+-C-O	      intern__fre__init_bound_pos     utils.c Allocate memory for a fre_boundary_pos* object.
+-C-O	      intern__fre__free_bound_pos     utils.c Release memory allocated for a single fre_boundary_pos* object. 
 
 * Will most likely be obsolete, as implementations must provide regmatch filled with good numbers.
 
 ** Merged into intern__fre__free_pmatch_node, as it was a single call to free(). 
 
-*** fre_bind() will create the pattern's pmatch_table.
+*** fre_bind() will create the pattern's pmatch_table. (Nope, it does not. _lib_init() does.)

@@ -68,7 +68,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
   default:
     /* 
      * If the first token is a punctuation mark, assume a match operation.
-     * This token will be used as the pattern's delimiter.
+     * Don't increment token_ind, this token will be used as the pattern's delimiter.
      */
     if (ispunct(FRE_TOKEN)){
       freg_object->fre_op_flag = MATCH;
@@ -137,12 +137,13 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     }
   }
 
-  /* Compile the modified pattern. */
-  if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
-    intern__fre__errmesg("Intern__fre__compile_pattern");
-    goto errjmp;
+  /* Compile the modified pattern unless the operation is transliteration. */
+  if (freg_object->fre_op_flag != TRANSLITERATE){
+    if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
+      intern__fre__errmesg("Intern__fre__compile_pattern");
+      goto errjmp;
+    }
   }
-  
   return freg_object; /* Success! */
   
  errjmp:
@@ -228,15 +229,23 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
  * Reset the ptable's ->whole_match[WM_IND] field and all it's corresponding
  * sub-matches to -1.
  */
-#define FRE_CANCEL_CUR_MATCH() do {			\
-    int i = 0;						\
-    fre_pmatch_table->whole_match[WM_IND]->bo = -1;	\
-    fre_pmatch_table->whole_match[WM_IND]->eo = -1;	\
-    while(i++ < fre_pmatch_table->subm_per_match){	\
-      fre_pmatch_table->sub_match[SM_IND]->bo = -1;	\
-      fre_pmatch_table->sub_match[SM_IND]->eo = -1;	\
-      if (SM_IND > 0) --SM_IND;				\
-    }							\
+#define FRE_CANCEL_CUR_MATCH() do {				\
+    int i = 0;							\
+    fre_pmatch_table->whole_match[WM_IND]->bo = -1;		\
+    fre_pmatch_table->whole_match[WM_IND]->eo = -1;		\
+    while(i++ < fre_pmatch_table->subm_per_match){		\
+      fre_pmatch_table->sub_match[SM_IND]->bo = -1;		\
+      fre_pmatch_table->sub_match[SM_IND]->eo = -1;		\
+      if (SM_IND > 0) --SM_IND;					\
+    }								\
+  } while(0);
+
+#define FRE_CANCEL_ALL_MATCH() do {				\
+    while(1) {							\
+      FRE_CANCEL_CUR_MATCH();					\
+      if (WM_IND > 0) --WM_IND;					\
+      else break;						\
+    }								\
   } while(0);
 
 
@@ -332,6 +341,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
     }
     
     if (freg_object->fre_match_op_bref == true){
+      /* Decrement SM_IND by the number of sub-matches per matches. */
       SM_IND -= fre_pmatch_table->subm_per_match;
       if ((replacement_len = intern__fre__insert_sm(freg_object, string, *numof_tokens, 0)) == FRE_ERROR){
 	intern__fre__errmesg("Intern__fre__insert_sm");
@@ -343,6 +353,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	goto errjmp;
       }
       freg_object->fre_match_op_bref = false;
+      FRE_CANCEL_CUR_MATCH();
       if ((match_op_ret = intern__fre__match_op(string, freg_object, numof_tokens)) == FRE_ERROR){
 	intern__fre__errmesg("Intern__fre__match_op");
 	goto errjmp;
@@ -354,7 +365,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       else {
 	fre_pmatch_table->lastop_retval = FRE_OP_UNSUCCESSFUL;
 	/* Resets revelant fields of the ptable to -1. */
-	FRE_CANCEL_CUR_MATCH();
+	FRE_CANCEL_ALL_MATCH();
       }
     }
     /* Extend the ->whole_match list if needed. */
@@ -500,12 +511,11 @@ int intern__fre__substitute_op(char *string,
 	    intern__fre__errmesg("SU_strcpy");
 	    goto errjmp;
 	  }
-	  if ((replacement_len = intern__fre__insert_sm(freg_object, string_copy,
-							sumof_tokens, 1)) == FRE_ERROR){
+	  if ((replacement_len = intern__fre__insert_sm(freg_object, string,
+							0, 1)) == FRE_ERROR){
 	    intern__fre__errmesg("Intern__fre__insert_sm");
 	    goto errjmp;
 	  }
-	  /* sumof_lenghts += replacement_len;  can overflow. */
 	}
 	for (sp_ind = 0;
 	     freg_object->striped_pattern[1][sp_ind] != '\0';
@@ -687,7 +697,7 @@ int intern__fre__transliterate_op(char *string,
   
 
 
-
+/* Vulnerable to 'use of uninitialized value'. Do not use in production code. */
 void print_ptable_hook(void)
 {
   size_t i = 0, n = 0;

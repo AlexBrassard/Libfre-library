@@ -13,7 +13,7 @@
 #include <pthread.h>
 
 #include "fre_internal.h"
-
+#include "fre_internal_macros.h"
 
 extern pthread_mutex_t fre_stderr_mutex;
 
@@ -68,7 +68,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
   default:
     /* 
      * If the first token is a punctuation mark, assume a match operation.
-     * This token will be used as the pattern's delimiter.
+     * Don't increment token_ind, this token will be used as the pattern's delimiter.
      */
     if (ispunct(FRE_TOKEN)){
       freg_object->fre_op_flag = MATCH;
@@ -137,12 +137,13 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
     }
   }
 
-  /* Compile the modified pattern. */
-  if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
-    intern__fre__errmesg("Intern__fre__compile_pattern");
-    goto errjmp;
+  /* Compile the modified pattern unless the operation is transliteration. */
+  if (freg_object->fre_op_flag != TRANSLITERATE){
+    if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
+      intern__fre__errmesg("Intern__fre__compile_pattern");
+      goto errjmp;
+    }
   }
-  
   return freg_object; /* Success! */
   
  errjmp:
@@ -696,7 +697,7 @@ int intern__fre__transliterate_op(char *string,
   
 
 
-
+/* Vulnerable to 'use of uninitialized value'. Do not use in production code. */
 void print_ptable_hook(void)
 {
   size_t i = 0, n = 0;

@@ -25,19 +25,19 @@ OBJECTS = fre_internal_utils.o fre_internal_init.o fre_internal_main.o fre_bind.
 
 libname = libfre.so.0.0.1
 
-${libname} : ${OBJECTS} fre_internal.h 
+${libname} : ${OBJECTS} fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -shared ${OBJECTS} -o ${libname} ${LDFLAGS}
 
-fre_internal_utils.o : fre_internal_utils.c fre_internal.h
+fre_internal_utils.o : fre_internal_utils.c fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_utils.c ${LDFLAGS}
 
-fre_internal_init.o : fre_internal_init.c fre_internal.h
+fre_internal_init.o : fre_internal_init.c fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_init.c ${LDFLAGS}
 
-fre_internal_main.o : fre_internal_main.c fre_internal.h
+fre_internal_main.o : fre_internal_main.c fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_main.c ${LDFLAGS}
 
-fre_bind.o : fre_internal.h fre.h fre_bind.c
+fre_bind.o : fre_internal_macros.h fre_internal.h fre.h fre_bind.c
 	${CC} ${CFLAGS} -fPIC -c fre_bind.c ${LDFLAGS} 
 
 .PHONY : clean

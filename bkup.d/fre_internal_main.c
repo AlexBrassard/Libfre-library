@@ -13,7 +13,7 @@
 #include <pthread.h>
 
 #include "fre_internal.h"
-
+#include "fre_internal_macros.h"
 
 extern pthread_mutex_t fre_stderr_mutex;
 
@@ -352,7 +352,10 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	intern__fre__errmesg("Intern__fre__compile_pattern");
 	goto errjmp;
       }
-      freg_object->fre_match_op_bref = false;
+      /* Can the next statement overflow? */
+      /* Only set fre_match_op_bref to false if there's no more backreference to insert. */
+      if (fre_pmatch_table->whole_match[fre_pmatch_table->bref_to_insert]->bo == -1)
+	freg_object->fre_match_op_bref = false;
       FRE_CANCEL_CUR_MATCH();
       if ((match_op_ret = intern__fre__match_op(string, freg_object, numof_tokens)) == FRE_ERROR){
 	intern__fre__errmesg("Intern__fre__match_op");

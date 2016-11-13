@@ -121,19 +121,19 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
       intern__fre__errmesg("Intern__fre__perl_to_posix");
       goto errjmp;
     }
-    if (SU_strcpy(freg_object->saved_pattern[0], freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT) == NULL){
+    /*    if (SU_strcpy(freg_object->saved_pattern[0], freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT) == NULL){
       intern__fre__errmesg("SU_strcpy");
       goto errjmp;
-    }
+      }*/
     if (freg_object->fre_op_flag == SUBSTITUTE) {
       if (intern__fre__perl_to_posix(freg_object, 1) != FRE_OP_SUCCESSFUL){
 	intern__fre__errmesg("Intern__fre__perl_to_posix");
 	goto errjmp;
       }
-      if (SU_strcpy(freg_object->saved_pattern[1], freg_object->striped_pattern[1], FRE_MAX_PATTERN_LENGHT) == NULL){
+      /*      if (SU_strcpy(freg_object->saved_pattern[1], freg_object->striped_pattern[1], FRE_MAX_PATTERN_LENGHT) == NULL){
 	intern__fre__errmesg("SU_strcpy");
 	goto errjmp;
-      }
+	}*/
     }
   }
 
@@ -341,7 +341,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
     }
     
     if (freg_object->fre_match_op_bref == true){
-      /* Decrement SM_IND by the number of sub-matches per matches. */
+      /* Decrement SM_IND by the number of sub-matches per matches, _insert_sm() will use it. */
       SM_IND -= fre_pmatch_table->subm_per_match;
       if ((replacement_len = intern__fre__insert_sm(freg_object, string, *numof_tokens, 0)) == FRE_ERROR){
 	intern__fre__errmesg("Intern__fre__insert_sm");
@@ -352,6 +352,8 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	intern__fre__errmesg("Intern__fre__compile_pattern");
 	goto errjmp;
       }
+      /* Can the next statement overflow? */
+      /* Only set fre_match_op_bref to false if there's no more backreference to insert. */
       freg_object->fre_match_op_bref = false;
       FRE_CANCEL_CUR_MATCH();
       if ((match_op_ret = intern__fre__match_op(string, freg_object, numof_tokens)) == FRE_ERROR){
@@ -364,7 +366,8 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       }
       else {
 	fre_pmatch_table->lastop_retval = FRE_OP_UNSUCCESSFUL;
-	/* Resets revelant fields of the ptable to -1. */
+	/* Resets revelant fields of the ptable to -1.
+	   Think about this twice, the current match was cleared before the recursive call to match_op. */
 	FRE_CANCEL_ALL_MATCH();
       }
     }

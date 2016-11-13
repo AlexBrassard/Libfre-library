@@ -96,6 +96,7 @@ typedef struct fpattern {
   /* Back-reference related */
   bool                  fre_match_op_bref;      /* True when back-reference(s) are found in a matching pattern. */
   bool                  fre_subs_op_bref;       /* True when back-reference(s) are found in the substitute pattern. */
+  int                   bref_to_insert;        /* The index of the backreference to be inserted in pattern. */
   fre_backref           *backref_pos;           /* Contains positions of back-references, when fre_op_bref is true. */
   
   /* Patterns */
@@ -234,17 +235,6 @@ void FRE_INSERT_DASH_RANGE(char *array,
 			   size_t *token_ind,
 			   int low,
 			   int high);
-int FRE_HANDLE_BREF(char *pattern,
-		    size_t *token_ind,
-		    size_t sub_match_ind,
-		    int fre_is_sub,
-		    fre_pattern *freg_object);
-int FRE_FETCH_MODIFIERS(char *pattern,
-			fre_pattern *freg_object,
-			size_t *token_ind);
-int FRE_SKIP_COMMENTS(char *pattern,
-		      size_t *pattern_len,
-		      size_t *token_ind);
 /**/
 
 /** Regex Parser utility routines. **/

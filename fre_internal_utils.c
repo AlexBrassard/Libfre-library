@@ -502,7 +502,7 @@ fre_pattern* intern__fre__init_pattern(void)
   freg_object->fre_op_flag = NONE;
   freg_object->fre_match_op_bref = false;
   freg_object->fre_subs_op_bref = false;
-  
+  freg_object->bref_to_insert = 0;
   /* All set. */
   return freg_object;
 
@@ -610,93 +610,37 @@ int intern__fre__compile_pattern(fre_pattern *freg_object)
 
 
 
-/* Skip commentary tokens and adjust the pattern lenght afterward. */
-#define FRE_SKIP_COMMENTS(pattern, new_pattern_len, token_ind)  do {	\
-    size_t i = 0;							\
-    while(pattern[*token_ind] != '\0') {				\
-      if (pattern[*token_ind] == '\n') break;				\
-      ++(*token_ind);							\
-      ++i;								\
-    }									\
-    /* Adjust the pattern's lenght and check for overflow. */		\
-    if (((*new_pattern_len) - i > 0)					\
-	&& ((*new_pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		\
-      (*new_pattern_len) -= i;						\
-    } else {								\
-      errno = 0;							\
-      intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); \
-      errno = EOVERFLOW;						\
-    }									\
-  }while (0);
-
-/* Fetch a user's pattern modifier(s). */
-int FRE_FETCH_MODIFIERS(char *pattern,
-			fre_pattern *freg_object,
-			size_t *token_ind)
-{
-  while (pattern[*token_ind] != '\0') {
-    switch (pattern[*token_ind]) {
-    case 'g':
-      freg_object->fre_mod_global = true;
-      break;
-    case 'i':
-      freg_object->fre_mod_icase = true;
-      break;
-    case 's':
-      freg_object->fre_mod_newline = true;
-      break;
-    case 'm':
-      freg_object->fre_mod_boleol = true;
-      break;
-    case 'x':
-      freg_object->fre_mod_ext = true;
-      break;
-    default:
-      errno = 0;
-      intern__fre__errmesg("Unknown modifier in pattern.");
-      return FRE_ERROR;
-    }
-    (*token_ind)++;
-  }
-  return FRE_OP_SUCCESSFUL;
-}
 
 
 /* 
  * Registers a backreference's position within the pattern it's been found
  * and also registers its real backreference number (the one found after the '\' or '$').
  */
-int FRE_HANDLE_BREF(char *pattern,
-		    size_t *token_ind,
-		    size_t sub_match_ind,
-		    int fre_is_sub,
-		    fre_pattern *freg_object)
-{
-  char refnum_string[FRE_MAX_PATTERN_LENGHT];
-  long refnum = 0;
-  size_t i = 0;
-  if (!fre_is_sub) {
-    freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = sub_match_ind;
-    freg_object->fre_match_op_bref = true;
-  }
-  else {
-    freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = sub_match_ind;
-    freg_object->fre_subs_op_bref = true;
-  }
-  memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);
-  ++(*token_ind);
-  do {
-    refnum_string[i++] = pattern[(*token_ind)++];
-  } while (isdigit(*token_ind));
-  refnum = atol(refnum_string);
-  if (!fre_is_sub){
-    freg_object->backref_pos->p_sm_number[freg_object->backref_pos->in_pattern_c++] = refnum;
-  }
-  else{
-    freg_object->backref_pos->s_sm_number[freg_object->backref_pos->in_substitute_c++] = refnum;
-  }
-  return FRE_OP_SUCCESSFUL;
-}
+#define FRE_HANDLE_BREF(pattern, token_ind, sub_match_ind, fre_is_sub, freg_object)do {	\
+    char refnum_string[FRE_MAX_PATTERN_LENGHT];				\
+    long refnum = 0;							\
+    size_t i = 0;							\
+    if (!fre_is_sub) {							\
+      freg_object->backref_pos->in_pattern[freg_object->backref_pos->in_pattern_c] = sub_match_ind; \
+      freg_object->fre_match_op_bref = true;				\
+    }									\
+    else {								\
+      freg_object->backref_pos->in_substitute[freg_object->backref_pos->in_substitute_c] = sub_match_ind; \
+      freg_object->fre_subs_op_bref = true;				\
+    }									\
+    memset(refnum_string, 0, FRE_MAX_PATTERN_LENGHT);			\
+    ++(*token_ind);							\
+    do {								\
+      refnum_string[i++] = pattern[(*token_ind)++];			\
+    } while (isdigit(*token_ind));					\
+    refnum = atol(refnum_string);					\
+    if (!fre_is_sub){							\
+      freg_object->backref_pos->p_sm_number[freg_object->backref_pos->in_pattern_c++] = refnum;	\
+    }									\
+    else{								\
+      freg_object->backref_pos->s_sm_number[freg_object->backref_pos->in_substitute_c++] = refnum; \
+    }									\
+  } while(0); 
 
 
 /*
@@ -992,6 +936,7 @@ int intern__fre__split_pattern(char *pattern,
  */
 int intern__fre__perl_to_posix(fre_pattern *freg_object,
 			       size_t is_sub){
+  bool   fre_do_not_push = false;     /* When true, tokens aren't pushed to new_pattern. */
   size_t in_bracket_exp = 0;          /* ++ each time we find a '[', -- each time we find  a ']'. */
   size_t in_bracket_count = 0;        /* Some meta-chars must be at a specific position in a bracket expression to be valid. */
   size_t numof_tokens = 0;            /* Used to help register back-reference positions. */
@@ -1045,6 +990,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 	&& (isdigit(freg_object->striped_pattern[is_sub][token_ind +1]))
 	&& in_bracket_exp == 0){
       --numof_tokens;
+      fre_do_not_push = true;
       if (is_sub){
 	/* Conditional expression is useless, numof_tokens == new_pattern_tos when substitute_c == 0 */
 	FRE_HANDLE_BREF(freg_object->striped_pattern[is_sub],
@@ -1088,9 +1034,22 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
     }
     /* Just a regular token. */
     push_token:
+    /*    if (fre_do_not_push == false)*/
     FRE_PUSH(FRE_TOKEN, new_pattern, &new_pattern_tos);
     
     ++token_ind; /* Get next token. */
+  }
+  /* 
+   * Copy new_pattern to saved_pattern[] then if do_not_push was set to true, 
+   * NULL terminate new_pattern at the index of the first found backreference and then
+   * copy new_pattern to ->striped_pattern[].
+   */
+  if (SU_strcpy(freg_object->saved_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
+    intern__fre__errmesg("SU_strcpy");
+    return FRE_ERROR;
+  }
+  if (fre_do_not_push == true && !is_sub){
+    new_pattern[freg_object->backref_pos->in_pattern[0]] = '\0';
   }
   if (SU_strcpy(freg_object->striped_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
     intern__fre__errmesg("SU_strcpy");
@@ -1103,12 +1062,16 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 
 
 /* Insert all sub-matches into the given pattern. */
+/*
+ * sp_ind should be the index of the first token of the backref sequence (\ or $).
+ */
 int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used throughout the library. */
 			   char *string,                  /* The string to match. */
-			   int numof_tokens,           /* Number of tokens skiped by a global operation. */
+			   int numof_tokens,              /* Number of tokens skiped by a global operation. */
 			   size_t is_sub)
 {
-  int string_ind = 0, sp_ind = 0, np_ind = 0, in_array_ind = 0;
+  bool added_bref = false;  /* True the first time we insert a backref. */
+  int string_ind = 0, sp_ind = 0, np_ind = 0, in_array_ind = 0, i = 0;
   int sm_count = 0, inserted_count = 0;
   int *in_array = ((!is_sub) ? freg_object->backref_pos->in_pattern : freg_object->backref_pos->in_substitute);
   int first_elem_pos = in_array[in_array_ind];
@@ -1120,19 +1083,15 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
     return FRE_ERROR;
   }
   memset(new_pattern, 0, FRE_MAX_PATTERN_LENGHT);
-  /*
-   * Loop over each characters of ->striped_pattern[is_sub] till we reach
-   * a backref position then insert the sub-match corresponding to the position 
-   * we're at into the new_pattern. Do that for ptable->subm_per_match (sub-match per match)
-   * number of sub-matches.
-   */
   while (sp_ind < FRE_MAX_PATTERN_LENGHT) {
     long subm_ind = ((!is_sub)? freg_object->backref_pos->p_sm_number[sm_count]
 		     : freg_object->backref_pos->s_sm_number[sm_count]);
-    if (in_array[in_array_ind] == -1) break;
-    if (in_array_ind != 0)
-      next_elem_pos = in_array[in_array_ind];
+    if (in_array[freg_object->bref_to_insert] == -1
+	|| ((first_elem_pos + next_elem_pos == sp_ind) && (added_bref == true))) break;
+    if (freg_object->bref_to_insert != 0)
+      next_elem_pos = in_array[freg_object->bref_to_insert];
     if (sp_ind == first_elem_pos + next_elem_pos){
+      if (!is_sub) added_bref = true; /* always false for substitute pattern. */
       /* -1: backref numbers starts at 1, arrays at 0. */
       for (string_ind = fre_pmatch_table->sub_match[subm_ind-1]->bo - numof_tokens;
 	   string_ind < fre_pmatch_table->sub_match[subm_ind-1]->eo - numof_tokens;
@@ -1140,8 +1099,9 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
 	new_pattern[np_ind++] = string[string_ind];
 	++inserted_count;
       }
-      ++sm_count;
-      ++in_array_ind; /* Get next backref position. */
+      ++sm_count;     /* Get next sub-match. */
+      /*      ++in_array_ind;  Get next backref position. */
+      ++(freg_object->bref_to_insert);
     }
     else if (freg_object->striped_pattern[is_sub][sp_ind] == '\0'
 	     && sp_ind < (first_elem_pos + next_elem_pos)){
@@ -1150,12 +1110,17 @@ int intern__fre__insert_sm(fre_pattern *freg_object,      /* The object used thr
     }
     else new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
   }
-
+  /* Get ready for the next call to insert_sm(). */
+  freg_object->bref_to_insert = 0;
   /* Make sure we forget no characters in ->striped_pattern[]. */
-  while(freg_object->striped_pattern[is_sub][sp_ind] != '\0')
-    new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
+  if (!is_sub)
+    while(freg_object->saved_pattern[is_sub][sp_ind] != '\0')
+      new_pattern[np_ind++] = freg_object->saved_pattern[is_sub][sp_ind++];
+  else
+    while(freg_object->striped_pattern[is_sub][sp_ind] != '\0')
+      new_pattern[np_ind++] = freg_object->striped_pattern[is_sub][sp_ind++];
   new_pattern[np_ind] = '\0';
-
+  
   if (SU_strcpy(freg_object->striped_pattern[is_sub], new_pattern, FRE_MAX_PATTERN_LENGHT) == NULL){
     intern__fre__errmesg("SU_strcpy");
     return FRE_ERROR;

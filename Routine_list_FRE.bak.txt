@@ -13,17 +13,17 @@ P---  Pseudo-coded.
 PCMOI	      function_name	   file(abreviation) Description
 
 /** Intern API **/
--C--	      SU_strcpy			      utils.c Safetly copy a string to another.
-PC-- 	      intern__fre__init_pattern       utils.c Allocate memory for a fre_pattern* object.
--C--	      intern__fre__free_pattern       utils.c Deallocate memory of a fre_pattern* object.
--C--	      intern__fre__init_bref_arr      utils.c Allocate memory for a fre_backref* object.
--C--	      intern__fre__free_bref_arr      utils.c Deallocate memory for a fre_backref* object.
-PC--	      intern__fre__init_smatch	      utils.c Allocate memory for a fre_smatch* object.
--C--	      intern__fre__init_pmatch_table  utils.c Allocate memory for a single table of type fre_pmatch*.
--C--	      intern__fre__free_pmatch_table  utils.c Deallocate memory for a single table of type fre_pmatch*.
--C--	      intern__fre__extend_ptable_list utils.c Extend the whole/sub_match array field of the pmatch-table. */
--C--	      intern__fre__init_head_table    utils.c Initialize the global headnode table.
--C--	      intern__fre__free_head_table    utils.c Release resources of the global headnode table itself.
+-C--	      SU_strcpy			      memutils.c Safetly copy a string to another.
+PC-- 	      intern__fre__init_pattern       memutils.c Allocate memory for a fre_pattern* object.
+-C--	      intern__fre__free_pattern       memutils.c Deallocate memory of a fre_pattern* object.
+-C--	      intern__fre__init_bref_arr      memutils.c Allocate memory for a fre_backref* object.
+-C--	      intern__fre__free_bref_arr      memutils.c Deallocate memory for a fre_backref* object.
+PC--	      intern__fre__init_smatch	      memutils.c Allocate memory for a fre_smatch* object.
+-C--	      intern__fre__init_pmatch_table  memutils.c Allocate memory for a single table of type fre_pmatch*.
+-C--	      intern__fre__free_pmatch_table  memutils.c Deallocate memory for a single table of type fre_pmatch*.
+-C--	      intern__fre__extend_ptable_list memutils.c Extend the whole/sub_match array field of the pmatch-table. */
+-C--	      intern__fre__init_head_table    memutils.c Initialize the global headnode table.
+-C--	      intern__fre__free_head_table    memutils.c Release resources of the global headnode table itself.
 
 -CM-	      FRE_PUSH		              macro.h Push a given token on the given tos of the given stack.
 PCM-	      FRE_SKIP_COMMENTS               macro.h Skip commentary in extended Perl-like patterns.
@@ -58,7 +58,6 @@ PC--	      intern__fre__transliterate_op   main.c  Execute a transliteration ope
 
 /** Debuging hooks **/
 -C--	      print_pattern_hook	      utils.c	        Display content of a fre_pattern object.
--C--	      print_string_hook		      utils.c		Loop over each chars of a string, printing them.
 -C--	      print_ptable_hook		      main.c		Display content of pmatch_table's current node.
 
 

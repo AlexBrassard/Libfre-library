@@ -21,7 +21,7 @@ ${CC} = ${GNUCC}                 # Your compiler.
 CFLAGS = ${GNUCFLAGS}            # Your compiler's compile flags.
 LDFLAGS = ${GNULDFLAGS}          # Your linker's flags.
 
-OBJECTS = fre_internal_utils.o fre_internal_init.o fre_internal_main.o fre_bind.o
+OBJECTS = fre_internal_utils.o fre_internal_memutils.o fre_internal_init.o fre_internal_main.o fre_bind.o
 
 libname = libfre.so.0.0.1
 
@@ -30,6 +30,9 @@ ${libname} : ${OBJECTS} fre_internal_macros.h fre_internal.h
 
 fre_internal_utils.o : fre_internal_utils.c fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_utils.c ${LDFLAGS}
+
+fre_internal_memutils.o : fre_internal_macros.h fre_internal.h
+	${CC} ${CFLAGS} -fPIC -c fre_internal_memutils.c ${LDFLAGS}
 
 fre_internal_init.o : fre_internal_init.c fre_internal_macros.h fre_internal.h
 	${CC} ${CFLAGS} -fPIC -c fre_internal_init.c ${LDFLAGS}

@@ -163,6 +163,11 @@ typedef struct fre_head_tab {
 # define FRE_OP_UNSUCCESSFUL           0       /* Indicate an unsuccessful operation. */
 # define FRE_ERROR                    -1       /* Indicate an error. */
 
+/* To shorten a little bit some of my already freaking long variable names: */
+#define WM_IND fre_pmatch_table->wm_ind
+#define SM_IND fre_pmatch_table->sm_ind
+
+
 static const char FRE_PAIRED_O_DELIMITERS[]   = "<({[";          /* Opening paired-type delimiters. */
 static const char FRE_PAIRED_C_DELIMITERS[]   = ">)}]";          /* Closing paired-type delimiters. */
 static const char FRE_POSIX_DIGIT_RANGE[]     = "[[:digit:]]";   /* Used to replace '\d' escape sequence. */

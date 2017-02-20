@@ -1,0 +1,32 @@
+./"Man-page
+." Contact "alexbrassardgh1@gmail.com" to correct errors of typos.
+.TH MANPAGE 3 "2017-20-02" "1.0" "Libfre library's manual"
+
+.SH NAME
+.br
+fre_bind\ \ \ \ \ \-\ \ \ \ \ Bind pattern against string
+
+.SH SYNOPSIS
+\fB#include <fre.h>
+
+.br
+\fBint fre_bind(char\fP\ \fI*pattern\fP,\ \fBchar\fP\ \fI*string\fP\,\ \fBsize_t\fP\ \fIstring_size\fP\fB)\fP
+.P
+Compile and link with \fI-lfre\fP and \fI-lpthread\fP.
+
+.SH DESCRIPTION
+fre_bind tries to mimic as closely as possible the '\fI=~\fP' binding operator of the \fBPerl 5\fP programming language,
+.br
+binding the \fBPerl 5\fP or \fBPOSIX ERE\fP regular expression \fI*pattern\fP with \fI*string\fP.
+.br
+Unlike most regular functions, \fBfre_bind()\fP returns 1 on success, 0 on failure and -1 when encountering an error, which makes for prettier '\fBif\fP' statements.
+.br
+(Ex: \fBif\fP (fre_bind("m/bob/", "Here's bob")) { do stuff... }
+.br
+\ \ \ \ \ Reads nicely as: If "match expression 'bob'" in "Here's bob" returns true, do stuff..)
+.P
+Note that any 'Non-POSIX' escape sequences (ex: word-boundary '\\b') that is not recognized by the C-preprocessor must have its backslash escaped not to produce a compile time error, but only when the pattern is hard coded into your program.
+
+.P
+.P
+.SH INCOMPLETE

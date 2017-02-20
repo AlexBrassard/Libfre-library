@@ -8,15 +8,15 @@
 
 
 
+#include "fre_internal_errcodes.h"
+#ifndef FRE_INTERNAL_MACRO_HEADER
+# define FRE_INTERNAL_MACRO_HEADER 
 
 /*
  * Add current token to the given stack and
  * update the given stack's TOS.
- * Really isn't needed but it did make it easier on my brain when designing the library. 
+ * Much too verbose, I agree, but it did make it easier on my brain when designing the library. 
  */
-#ifndef FRE_INTERNAL_MACRO_HEADER
-# define FRE_INTERNAL_MACRO_HEADER 1
-
 # define FRE_PUSH(token, stack, tos) do {	      \
     stack[*tos] = token;			      \
     ++(*tos);					      \
@@ -24,61 +24,65 @@
 
 
 /* Skip commentary tokens and adjust the pattern lenght afterward. */
-# define FRE_SKIP_COMMENTS(pattern, new_pattern_len, token_ind)  do {	\
+# define FRE_SKIP_COMMENTS(cdelimiter, cpattern, cnew_pattern_len, ctoken_ind)  do {	\
     size_t i = 0;							\
-    while(pattern[*token_ind] != '\0') {				\
-      if (pattern[*token_ind] == '\\' && pattern[(*token_ind) + 1] == 'n'){ \
-	(*token_ind) += 2;						\
+    errno = 0;								\
+    while(cpattern[*ctoken_ind] != '\0') {				\
+      if (cpattern[*ctoken_ind] == '\\' && cpattern[(*ctoken_ind)+1] == 'n'){ \
+	(*ctoken_ind) += 2;	i += 2;					\
 	break;								\
       }									\
-      ++(*token_ind);							\
+      /* Can underflow: */						\
+      else if (cpattern[*ctoken_ind] == cdelimiter && cpattern[(*ctoken_ind)-1] != '\\'){ \
+	++(*ctoken_ind);	++i;					\
+	break;								\
+      }									\
+      ++(*ctoken_ind);							\
       ++i;								\
     }									\
     /* Adjust the pattern's lenght and check for overflow. */		\
-    if (((*new_pattern_len) - i > 0)					\
-	&& ((*new_pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {		\
-      (*new_pattern_len) -= i;						\
+    if (((*cnew_pattern_len) - i > 0)					\
+	&& ((*cnew_pattern_len) - i < FRE_MAX_PATTERN_LENGHT)) {	\
+      (*cnew_pattern_len) -= i;						\
     } else {								\
-      errno = 0;                                                        \
-      intern__fre__errmesg("FRE_SKIP_COMMENTS failed to adjust pattern's lenght"); \
-      errno = EOVERFLOW;                                                \
+      errno = FRE_LENGHTADJ;						\
     }                                                                   \
   }while (0);
 
 
 /* Fetch a user's pattern modifier(s). */
 # define FRE_FETCH_MODIFIERS(pattern, freg_object, token_ind) do {      \
-    while (pattern[*token_ind] != '\0') {			       \
-      switch (pattern[*token_ind]) {				       \
-      case 'g':							       \
-	freg_object->fre_mod_global = true;			       \
-	break;							       \
-      case 'i':							       \
-	freg_object->fre_mod_icase = true;			       \
-	break;							       \
-      case 's':							       \
-	freg_object->fre_mod_newline = true;			       \
-	break;							       \
-      case 'm':							       \
-	freg_object->fre_mod_boleol = true;			       \
-	break;							       \
-      case 'x':							       \
-	freg_object->fre_mod_ext = true;			       \
-	break;							       \
-      default:							       \
-	errno = 0;						       \
-	intern__fre__errmesg("Unknown modifier in pattern.");	       \
-	return FRE_ERROR;					       \
-      }								       \
-      (*token_ind)++;						       \
-    }								       \
-    return FRE_OP_SUCCESSFUL;					       \
+    errno = 0;								\
+    while (pattern[*token_ind] != '\0') {				\
+      switch (pattern[*token_ind]) {					\
+      case 'g':								\
+	freg_object->fre_mod_global = true;				\
+	break;								\
+      case 'i':								\
+	freg_object->fre_mod_icase = true;				\
+	break;								\
+      case 's':								\
+	freg_object->fre_mod_newline = true;				\
+	break;								\
+      case 'm':								\
+	freg_object->fre_mod_boleol = true;				\
+	break;								\
+      case 'x':								\
+	freg_object->fre_mod_ext = true;				\
+	break;								\
+      default:								\
+	errno = FRE_INVALMODIF;						\
+	break;								\
+      }									\
+      if (errno) break;							\
+      (*token_ind)++;							\
+    }									\
   } while(0) ;
 
 
 /*
  * Registers a backreference's position within the pattern it's been found
- * and also registers its real backreference number (the one found after the '\' or '$'). 
+ * and registers its real backreference number (the one found after the '\' or '$'). 
  */
 # define FRE_HANDLE_BREF(pattern, token_ind, sub_match_ind, fre_is_sub, freg_object)do { \
     char refnum_string[FRE_MAX_PATTERN_LENGHT];				\
@@ -118,34 +122,43 @@
  * the new pattern's top of stack and lenght.
  * Make careful use of this MACRO since it may returns an integer. 
  */
-# define FRE_QUOTE_TOKENS(qfreg_object, qpattern, qtoken_ind, qnew_pat_tos, qnew_pat_len) do { \
-    size_t new_pat_len = qnew_pat_len;                                  \
-    (*qtoken_ind) += 2; /* To be at the first token of the sequence */  \
-    while(qpattern[*qtoken_ind] != '\0'){                               \
-      if (qpattern[*qtoken_ind] == '\\'){                               \
-	if (qpattern[(*qtoken_ind)+1] == 'E') {                         \
-	  (*qtoken_ind) += 2;                                           \
-	  break;                                                        \
-	}                                                               \
-      }                                                                 \
+# define FRE_QUOTE_TOKENS(qfreg_object, qpattern, qtoken_ind, qnew_pat_tos) do { \
+    bool bslash = false; /* True upon finding a backslash. */		\
+    errno = 0;								\
+    (*qtoken_ind) += 2; /* To be at the first token of the sequence */	\
+    while(qpattern[*qtoken_ind] != '\0'){				\
+      if (qpattern[*qtoken_ind] == '\\'){				\
+	bslash = true;							\
+	if (qpattern[(*qtoken_ind)+1] == 'E') {				\
+	  (*qtoken_ind) += 2;						\
+	  break;							\
+	}								\
+      }									\
       if ((qpattern[*qtoken_ind] == qfreg_object->delimiter && qfreg_object->fre_paired_delimiters == false) \
-	  || (qpattern[*qtoken_ind] == qfreg_object->c_delimiter && qfreg_object->fre_paired_delimiters == true)) break; \
-      switch(qpattern[*qtoken_ind]) {                                   \
-      case '.' : case '[' : case '\\':                                  \
-      case '(' : case ')' : case '*' :                                  \
-      case '+' : case '?' : case '{' :                                  \
-      case '|' : case '^' : case '$' :                                  \
-	if ((new_pat_len += 1) >= FRE_MAX_PATTERN_LENGHT){              \
-	  errno = 0; intern__fre__errmesg("Overflow replacing Perl-like \\Q...\\E escape sequence"); \
-	  errno = EOVERFLOW;                                            \
-	  return FRE_ERROR;                                             \
-	}                                                               \
-	FRE_PUSH('\\', qfreg_object->striped_pattern[0], qnew_pat_tos); \
-	break;                                                          \
-      }                                                                 \
+	  || (qpattern[*qtoken_ind] == qfreg_object->c_delimiter && qfreg_object->fre_paired_delimiters == true)){ \
+	if (bslash == false) { break;					\
+	} else {							\
+	  FRE_PUSH(qpattern[*qtoken_ind], qfreg_object->striped_pattern[0], qnew_pat_tos); \
+	  bslash = false; ++(*qtoken_ind); continue;			\
+	}								\
+      }									\
+      switch(qpattern[*qtoken_ind]) {					\
+      case '.' : case '[' : case '\\':					\
+      case '(' : case ')' : case '*' :					\
+      case '+' : case '?' : case '{' :					\
+      case '|' : case '^' : case '$' :					\
+	if ((strlen(qfreg_object->striped_pattern[0]) + 1) >= FRE_MAX_PATTERN_LENGHT){ \
+	  errno = FRE_QUOTEOVERF;	break;				\
+	}								\
+	FRE_PUSH('\\', qfreg_object->striped_pattern[0], qnew_pat_tos);	\
+	break;								\
+      default:								\
+	break;								\
+      }									\
+      if (errno) break;							\
       FRE_PUSH(qpattern[*qtoken_ind], qfreg_object->striped_pattern[0], qnew_pat_tos); \
-      (*qtoken_ind) += 1;                                               \
-    }                                                                   \
+      (*qtoken_ind) += 1;						\
+    }									\
   } while (0);
 
 
@@ -159,6 +172,7 @@
  */
 # define FRE_REGISTER_BOUNDARY(freg_objet, spa_tos, new_pat, new_pat_tos, new_pat_len, is_sub, is_word) do{ \
     size_t i = 0;                                                       \
+    errno = 0;								\
     if (spa_tos == 0){                                                  \
       if (!is_sub) freg_object->fre_match_op_bow = true;                \
       else freg_object->fre_subs_op_bow = true;                         \
@@ -169,14 +183,12 @@
     else {                                                              \
       if (is_word){                                                     \
 	if ((*new_pat_len += strlen(FRE_POSIX_NON_WORD_CHAR)+1) >= FRE_MAX_PATTERN_LENGHT){ \
-	  errno = 0; intern__fre__errmesg("Overflow replacing a word boundary sequence"); \
-	  errno = EOVERFLOW; return FRE_ERROR;                          \
+	  errno = FRE_BOUNDOVERF; break;				\
 	}                                                               \
 	while(FRE_POSIX_NON_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_WORD_CHAR[i++], new_pat, new_pat_tos); \
       } else {                                                          \
 	if ((*new_pat_len += strlen(FRE_POSIX_WORD_CHAR)+1) >= FRE_MAX_PATTERN_LENGHT){ \
-	  errno = 0; intern__fre__errmesg("Overflow replacing a word boundary sequence"); \
-	  errno = EOVERFLOW; return FRE_ERROR;                          \
+	  errno = FRE_BOUNDOVERF; break;				\
 	}                                                               \
 	while (FRE_POSIX_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_WORD_CHAR[i++], new_pat, new_pat_tos); \
       }                                                                 \
@@ -194,54 +206,54 @@
  */
 # define FRE_CERTIFY_ESC_SEQ(is_sub, token_ind, new_pat, new_pat_tos, new_pat_len, freg_object) do { \
     size_t i = 0;                                                       \
+    errno = 0;								\
     switch(freg_object->striped_pattern[is_sub][*token_ind + 1]){       \
     case 'd':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
-	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like digit range '\\d'"); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\d");		\
+	break;								\
       }                                                                 \
       while (FRE_POSIX_DIGIT_RANGE[i] != '\0') FRE_PUSH(FRE_POSIX_DIGIT_RANGE[i++], new_pat, new_pat_tos); \
       /* Adjust the token index. */                                     \
       *token_ind += 2;                                                  \
       break;                                                            \
     case 'D':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
-	errno = 0; intern__fre__errmesg("Pattern lenght exceed maximum converting Perl-like not digit range '\\D'"); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_NON_DIGIT_RANGE)) >= FRE_MAX_PATTERN_LENGHT) { \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\D");		\
+	break;								\
       }                                                                 \
       while(FRE_POSIX_NON_DIGIT_RANGE[i] != '\0') FRE_PUSH(FRE_POSIX_NON_DIGIT_RANGE[i++], new_pat, new_pat_tos); \
       /* Adjust the token index. */                                     \
       *token_ind += 2;                                                  \
       break;                                                            \
     case 'w':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow convering Perl-like '\\w' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\w");		\
+	break;								\
       }                                                                 \
       while (FRE_POSIX_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_WORD_CHAR[i++], new_pat, new_pat_tos); \
       *token_ind += 2;                                                  \
       break;                                                            \
-      /* More test will go here. */                                     \
     case 'W':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_NON_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\W' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_NON_WORD_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\W");		\
+	break;								\
       }                                                                 \
       while (FRE_POSIX_NON_WORD_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_WORD_CHAR[i++], new_pat, new_pat_tos); \
       *token_ind += 2;                                                  \
       break;                                                            \
     case 's':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\s' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\s");		\
+	break;								\
       }                                                                 \
       while (FRE_POSIX_SPACE_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_SPACE_CHAR[i++], new_pat, new_pat_tos); \
       *token_ind += 2;                                                  \
       break;                                                            \
     case 'S':                                                           \
-      if ((*new_pat_len += strlen(FRE_POSIX_NON_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
-	errno = 0; intern__fre__errmesg("Overflow converting Perl-like '\\S' into a POSIX construct."); \
-	errno = EOVERFLOW; return FRE_ERROR;                            \
+      if (((*new_pat_len) += strlen(FRE_POSIX_NON_SPACE_CHAR)) >= FRE_MAX_PATTERN_LENGHT){ \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\S");		\
+	break;								\
       }                                                                 \
       while (FRE_POSIX_NON_SPACE_CHAR[i] != '\0') FRE_PUSH(FRE_POSIX_NON_SPACE_CHAR[i++], new_pat, new_pat_tos); \
       *token_ind += 2;                                                  \
@@ -259,11 +271,18 @@
       freg_object->fre_not_boundary = true;                             \
       *token_ind += 2;                                                  \
       break;                                                            \
+    case 'N':								\
+      if (((*new_pat_len) += strlen(FRE_POSIX_ALL_BUT_NEWLINE)) >= FRE_MAX_PATTERN_LENGHT){ \
+	errno = FRE_ESCSEQOVERF; intern__fre__errmesg("\\N");		\
+	break;								\
+      }									\
+      while (FRE_POSIX_ALL_BUT_NEWLINE[i] != '\0') FRE_PUSH(FRE_POSIX_ALL_BUT_NEWLINE[i++], new_pat, new_pat_tos); \
+      *token_ind += 2;							\
+      break;								\
     default:                                                            \
       /* Assume a supported sequence, push the tokens on the pattern stack. */ \
       FRE_PUSH(freg_object->striped_pattern[is_sub][(*token_ind)++], new_pat, new_pat_tos); \
       FRE_PUSH(freg_object->striped_pattern[is_sub][(*token_ind)++], new_pat, new_pat_tos); \
-      /*(*token_ind) += 2;*/                                            \
       break;                                                            \
     }                                                                   \
   }while (0);

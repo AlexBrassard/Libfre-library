@@ -17,14 +17,17 @@ with no extra dependencies.
 Fre_bind tries to mimic as closely as possible Perl's bind operator '=~' that
 binds a regex pattern against a string, executing the operation designated by
 the pattern used.
+(A short manpage explaining fre_bind's behavior is available under "man_page_src.d/".)
 
-Libfre achieves to keep POSIX conformance by converting any Perl-like elements of a
-given pattern that are not POSIX compatible into POSIX constructs.
+Libfre tries to achieve POSIX conformance by converting any Perl-like elements of a
+given pattern that are not POSIX compatible into POSIX constructs
 Results and behaviours of a given pattern depends greatly on your locale.
 
 'fre' stands for "Findf Regular Expression" since it was first born within the Libfindf library,
 and I'm not very original with names.
 
+A copy of my personal notes on features available and those to be implemented
+is called Features.txt, in the main directory of this repo.
 
 
 -Version 0.00 up to 1.00 will concentrate on making things works, especialy the 3 basic operations:
@@ -36,5 +39,6 @@ and I'm not very original with names.
 
 -Further versions will concentrate on profiling and optimizations.
 
+Take warning that it has been tested only on Linux Debian 8.5, using Glibc 2.19 and Gcc 4.9.2-10.
 
 Note that I'm always using a 132x32 terminal window, sorry for the inconvinience.

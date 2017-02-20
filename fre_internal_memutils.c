@@ -17,6 +17,7 @@
 
 #include "fre_internal.h"
 #include "fre_internal_macros.h"
+#include "fre_internal_errcodes.h"
 
 extern fre_headnodes *fre_headnode_table;
 

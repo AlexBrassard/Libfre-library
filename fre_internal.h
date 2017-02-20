@@ -23,7 +23,6 @@ extern pthread_mutex_t fre_stderr_mutex; /* Defined and initialized in "fre_inte
 
 /** Data structures **/
 
-
 /* Sub-match(es) begining/ending of match offsets structure. */
 typedef struct fre_sm{
   int                   bo;               /* Offset of the begining of sub-match. */
@@ -96,13 +95,13 @@ typedef struct fpattern {
   /* Back-reference related */
   bool                  fre_match_op_bref;      /* True when back-reference(s) are found in a matching pattern. */
   bool                  fre_subs_op_bref;       /* True when back-reference(s) are found in the substitute pattern. */
-  int                   bref_to_insert;        /* The index of the backreference to be inserted in pattern. */
+  int                   bref_to_insert;         /* The index of the backreference to be inserted in pattern. */
   fre_backref           *backref_pos;           /* Contains positions of back-references, when fre_op_bref is true. */
   
   /* Patterns */
   regex_t               *comp_pattern;         /* The compiled regex pattern. */
   char                  **striped_pattern;     /* Exactly 2 strings, holds patterns striped from Perl syntax elements. */
-  char                  **saved_pattern;       /* Exactly 2 strings, copies of strip_pattern[0|1] before _atch_op modifies them. */
+  char                  **saved_pattern;       /* Exactly 2 strings, copies of strip_pattern[0|1] before _match_op modifies them. */
 
 } fre_pattern;
 
@@ -176,30 +175,16 @@ static const char FRE_POSIX_WORD_CHAR[]       = "[_[:alpha:]]";  /* Used to repl
 static const char FRE_POSIX_NON_WORD_CHAR[]   = "[^_[:alpha:]]"; /* Used to replace '\W' escape sequence. */
 static const char FRE_POSIX_SPACE_CHAR[]      = "[[:space:]]";   /* Used to replace '\s' escape sequence. */
 static const char FRE_POSIX_NON_SPACE_CHAR[]  = "[^[:space:]]";  /* Used to replace '\S' escape sequence. */
+static const char FRE_POSIX_ALL_BUT_NEWLINE[] = "[^\\n]";         /* Used to replace '\N' escape sequence. */
 extern fre_headnodes *fre_headnode_table;                 /* Global table of linked-lists headnodes, use with care. */
-
-/* Simple error message. */
-# define intern__fre__errmesg(string) do {		\
-    pthread_mutex_lock(&fre_stderr_mutex);		\
-    if (errno) {					\
-      perror(string);					\
-    } else {						\
-      fprintf(stderr, "%s ", string);			\
-    }							\
-    fprintf(stderr, "@ line: %d\n\n", __LINE__);	\
-    pthread_mutex_unlock(&fre_stderr_mutex);		\
-  } while (0);
-
-
-
 
 /*** Internal function prototypes ***/
 
 void *SU_strcpy(char *dest, char *src, size_t n);                  /* Safely copy src to dest[n] */
 
 /** Library's init/finit. **/
-int          intern__fre__lib_init(void);                          /* Initialize the library's globals. */
-void         intern__fre__lib_finit(void);                         /* Free the library's globals memory. */
+int            intern__fre__lib_init(void);                          /* Initialize the library's globals. */
+void           intern__fre__lib_finit(void);                         /* Free the library's globals memory. */
 
 
 /** Memory allocation/deallocation routines. **/
@@ -235,11 +220,6 @@ char*          intern__fre__cut_match(char *string,                   /* Remove 
 void print_pattern_hook(fre_pattern* pat);
 void print_ptable_hook(void);
 
-/* Likely to become MACROS. */
-void FRE_INSERT_DASH_RANGE(char *array,
-			   size_t *token_ind,
-			   int low,
-			   int high);
 /**/
 
 /** Regex Parser utility routines. **/

@@ -14,6 +14,7 @@
 #include <pthread.h>
 
 #include "fre_internal.h"
+#include "fre_internal_errcodes.h"
 
 static inline fre_pmatch* intern__fre__fetch_head(void);
 pthread_mutex_t fre_stderr_mutex;  /* For when error/debug messages has multiple function calls. */

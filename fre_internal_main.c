@@ -14,6 +14,7 @@
 
 #include "fre_internal.h"
 #include "fre_internal_macros.h"
+#include "fre_internal_errcodes.h"
 
 extern pthread_mutex_t fre_stderr_mutex;
 
@@ -64,7 +65,8 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
       break;
     }
     else {
-      intern__fre__errmesg("Syntax error: Unknown operation in pattern");
+      errno = FRE_UNKNOWNOP;
+      intern__fre__errmesg("_plp_parser");
       goto errjmp;
     }
   default:
@@ -77,7 +79,8 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
       break;
     }
     else {
-      intern__fre__errmesg("Syntax error: Unknown operation in pattern");
+      errno = FRE_UNKNOWNOP;
+      intern__fre__errmesg("_plp_parser");
       goto errjmp;
     }
   }
@@ -100,8 +103,8 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
   }
   /* Syntax error. */
   else {
-    errno = 0; /* Make sure errno is not set, else perror() will be called. */
-    intern__fre__errmesg("Syntax error: Missing delimiter in pattern");
+    errno = FRE_PATRNDELIM; /* Make sure errno is not set, else perror() will be called. */
+    intern__fre__errmesg("_plp_parser");
     goto errjmp;
   }
 
@@ -110,7 +113,7 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
    * split the "matching pattern" from the "substitute" pattern (if there's one).
    */
   if (intern__fre__split_pattern(pattern, freg_object, token_ind) != FRE_OP_SUCCESSFUL){
-    intern__fre__errmesg("Intern__fre__strip_pattern");
+    intern__fre__errmesg("_split_pattern");
     goto errjmp;
   }
   
@@ -120,18 +123,18 @@ fre_pattern* intern__fre__plp_parser(char *pattern)
    */
   if (freg_object->fre_op_flag != TRANSLITERATE){
     if (intern__fre__perl_to_posix(freg_object, 0) != FRE_OP_SUCCESSFUL){
-      intern__fre__errmesg("Intern__fre__perl_to_posix");
+      intern__fre__errmesg("_perl_to_posix");
       goto errjmp;
     }
     if (freg_object->fre_op_flag == SUBSTITUTE) {
       if (intern__fre__perl_to_posix(freg_object, 1) != FRE_OP_SUCCESSFUL){
-	intern__fre__errmesg("Intern__fre__perl_to_posix");
+	intern__fre__errmesg("_perl_to_posix");
 	goto errjmp;
       }
     }
     /* Compile the modified matching pattern. */
     if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
-      intern__fre__errmesg("Intern__fre__compile_pattern");
+      intern__fre__errmesg("_compile_pattern");
       goto errjmp;
     }
   }
@@ -193,7 +196,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	if (++SM_IND >= fre_pmatch_table->sm_size){
 	  /* 0 == whole_match list, 1 == sub_match list. */
 	  if (intern__fre__extend_ptable_list(1) == FRE_ERROR){
-	    intern__fre__errmesg("Intern__fre__extend_ptable_list");
+	    intern__fre__errmesg("_extend_ptable_list");
 	    goto errjmp;
 	  }
 	}
@@ -205,9 +208,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
        * contains only -1s, we've got a problem. 
        * Long way of saying it can never happen or chaos and darkness will follow. 
        */
-      errno = 0;
-      intern__fre__errmesg("No valid positions in regmatch array element 0.");
-      errno = ENODATA;
+      errno = FRE_INVALBREF;
       goto errjmp;
     }
     /*The number of sub-matches per matches. */
@@ -225,13 +226,13 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
 				   fre_pmatch_table->whole_match[WM_IND]->bo,
 				   fre_pmatch_table->whole_match[WM_IND]->eo) == NULL){
-	  intern__fre__errmesg("Intern__fre__cut_match");
+	  intern__fre__errmesg("_cut_match");
 	  goto errjmp;
 	}
 	/* Clear the current, unsuccessful match position from the pmatch_table. */
 	FRE_CANCEL_CUR_MATCH();
 	if (intern__fre__match_op(string_copy, freg_object, numof_tokens) == FRE_ERROR){
-	  intern__fre__errmesg("Intern__fre__match_op");
+	  intern__fre__errmesg("_match_op");
 	  goto errjmp;
 	}
       }
@@ -241,12 +242,12 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       /* Decrement SM_IND by the number of sub-matches per matches, _insert_sm() will use it. */
       SM_IND -= fre_pmatch_table->subm_per_match;
       if ((replacement_len = intern__fre__insert_sm(freg_object, string, *numof_tokens, 0)) == FRE_ERROR){
-	intern__fre__errmesg("Intern__fre__insert_sm");
+	intern__fre__errmesg("_insert_sm");
 	goto errjmp;
       }
       regfree(freg_object->comp_pattern);
       if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
-	intern__fre__errmesg("Intern__fre__compile_pattern");
+	intern__fre__errmesg("_compile_pattern");
 	goto errjmp;
       }
       /* Can the next statement overflow? */
@@ -254,7 +255,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       freg_object->fre_match_op_bref = false;
       FRE_CANCEL_CUR_MATCH();
       if ((match_op_ret = intern__fre__match_op(string, freg_object, numof_tokens)) == FRE_ERROR){
-	intern__fre__errmesg("Intern__fre__match_op");
+	intern__fre__errmesg("_match_op");
 	goto errjmp;
       }
       else if (match_op_ret == FRE_OP_SUCCESSFUL){
@@ -271,7 +272,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
     /* Extend the ->whole_match list if needed. */
     if (++WM_IND >= fre_pmatch_table->wm_size)
       if (intern__fre__extend_ptable_list(0) == FRE_ERROR){
-	intern__fre__errmesg("Intern__fre__extend_ptable_list");
+	intern__fre__errmesg("_extend_ptable_list");
 	goto errjmp;
       }
     /* Handle global operations. */
@@ -279,7 +280,7 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
       if (intern__fre__cut_match(string_copy, numof_tokens, string_len,
 				 fre_pmatch_table->whole_match[WM_IND-1]->bo,
 				 fre_pmatch_table->whole_match[WM_IND-1]->eo) == NULL){
-	intern__fre__errmesg("Intern__fre__cut_match");
+	intern__fre__errmesg("_cut_match");
 	goto errjmp;
       }
       if (strlen(string_copy) > 0){
@@ -293,12 +294,12 @@ int intern__fre__match_op(char *string,                  /* The string to bind t
 	    goto errjmp;
 	  }
 	  if (intern__fre__compile_pattern(freg_object) == FRE_ERROR){
-	    intern__fre__errmesg("Intern__fre__compile_pattern");
+	    intern__fre__errmesg("_compile_pattern");
 	    goto errjmp;
 	  }
 	}
 	if (intern__fre__match_op(string_copy, freg_object, numof_tokens) == FRE_ERROR){
-	  intern__fre__errmesg("Intern__fre__match_op");
+	  intern__fre__errmesg("_match_op");
 	  goto errjmp;
 	}
       }
@@ -367,7 +368,7 @@ int intern__fre__substitute_op(char *string,
     goto errjmp;
   }
   if ((match_ret = intern__fre__match_op(string, freg_object, offset_to_start)) == FRE_ERROR){
-    intern__fre__errmesg("Intern__fre__match_op");
+    intern__fre__errmesg("_match_op");
     goto errjmp;
   }
   else if (match_ret == FRE_OP_UNSUCCESSFUL){
@@ -401,7 +402,7 @@ int intern__fre__substitute_op(char *string,
 	if (intern__fre__cut_match(string_copy, &temp_sumof_tokens, string_size,
 				   fre_pmatch_table->whole_match[WM_IND]->bo,
 				   fre_pmatch_table->whole_match[WM_IND]->eo) == NULL){
-	  intern__fre__errmesg("Intern__fre__cut_match");
+	  intern__fre__errmesg("_cut_match");
 	  goto errjmp;
 	}
 	sumof_tokens = (int)temp_sumof_tokens;
@@ -413,7 +414,7 @@ int intern__fre__substitute_op(char *string,
 	  }
 	  if ((replacement_len = intern__fre__insert_sm(freg_object, string,
 							0, 1)) == FRE_ERROR){
-	    intern__fre__errmesg("Intern__fre__insert_sm");
+	    intern__fre__errmesg("_insert_sm");
 	    goto errjmp;
 	  }
 	}
@@ -533,8 +534,7 @@ int intern__fre__transliterate_op(char *string,
    */
   if (strlen(freg_object->striped_pattern[0]) !=
       strlen(freg_object->striped_pattern[1])){
-    errno = 0;
-    intern__fre__errmesg("Syntax error: Non-matching number of tokens in transliteration operation pattern.");
+    errno = FRE_INVALTRANSL;
     goto errjmp;
   }
       

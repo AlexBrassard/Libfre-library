@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#
+#######################
 #
 #
 #  Libfre.so  -  Library and man-page installation script.
@@ -13,6 +13,11 @@
 #  Run the script with [-wm] to install both the library and the man-pages.
 #
 #
+# Warnings:
+#  Tested only on Linux Debian 8.5, Using Glibc v2.19 and GCC v4.9.2-10.
+#  This script is calling 'sudo'.
+#
+########################
 
 # Adjust these to your own system needs.
 header_dir="/usr/include/"
@@ -37,7 +42,7 @@ fi
 
 
 function install_man() {
-    cd $PWD/man_pages_src 
+    cd $PWD/man_pages_src.d
     rm -f *.gz
     # Compress the man-pages.
     for mfile in $PWD/*

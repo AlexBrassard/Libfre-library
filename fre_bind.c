@@ -14,6 +14,14 @@
 
 #include <fre.h>
 #include "fre_internal.h"
+#include "fre_internal_macros.h"
+#include "fre_internal_errcodes.h"
+
+
+/* Error message. */
+void FRE_PERROR(char *funcname)  {
+  intern__fre__errmesg(funcname);
+}
 
 
 int fre_bind(char *pattern,       /* The regex pattern. */
@@ -39,11 +47,7 @@ int fre_bind(char *pattern,       /* The regex pattern. */
    */
   pattern_len = strnlen(pattern, FRE_MAX_PATTERN_LENGHT);
   if (pattern[pattern_len] != '\0') {
-    pthread_mutex_lock(&fre_stderr_mutex);
-    fprintf(stderr, "Libfre handles pattern no longer than 256 bytes (including the terminating NULL byte)\n\
-This is to keep POSIX conformance.\n\n");
-    pthread_mutex_unlock(&fre_stderr_mutex);
-    errno = EOVERFLOW;
+    errno = FRE_PATRNTOOLONG;
     return FRE_ERROR;
   }
   string_len = strnlen(string, FRE_ARG_STRING_MAX_LENGHT);
@@ -108,7 +112,7 @@ Fragment or reduce the size of your input.\n\n",
   freg_object = NULL;
   /* Check how the operation went. */
   if (retval == FRE_ERROR){
-    intern__fre__errmesg("_op_match: Error executing matching operation");
+    errno = FRE_OPERROR;
   }
 
   return retval;

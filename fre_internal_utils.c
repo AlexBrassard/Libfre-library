@@ -18,7 +18,7 @@
 
 #include "fre_internal.h"
 #include "fre_internal_macros.h"
-
+#include "fre_internal_errcodes.h"
 
 extern fre_headnodes *fre_headnode_table;
 
@@ -106,8 +106,7 @@ int intern__fre__split_pattern(char *pattern,
       else if (numof_delimiters == FRE_EXPECTED_ST_OP_DELIMITER
 	       && freg_object->fre_op_flag != MATCH) { break; }
       else{ /* Syntax error: Missing closing delimiter. */
-	errno = 0; intern__fre__errmesg("Pattern missing closing delimiter");
-	errno = ENODATA;
+	errno = FRE_PATRNDELIM;
 	return FRE_ERROR;
       }
     }
@@ -116,8 +115,11 @@ int intern__fre__split_pattern(char *pattern,
     /* Handle some escape sequences here (instead of protecting them so they reach _perl_to_posix()) */
     if (FRE_TOKEN == '\\') {
       if (pattern[token_ind+1] == 'Q'&& spa_ind == 0){
-	FRE_QUOTE_TOKENS(freg_object, pattern, &token_ind,
-			 &spa_tos, strlen(freg_object->striped_pattern[spa_ind]));
+	FRE_QUOTE_TOKENS(freg_object, pattern, &token_ind, &spa_tos);
+	if (errno) {
+	  intern__fre__errmesg("FRE_QUOTE_TOKENS");
+	  return FRE_ERROR;
+	}
       }
       else if (pattern[token_ind+1] == freg_object->delimiter
 	       || (freg_object->fre_paired_delimiters == true
@@ -147,6 +149,10 @@ int intern__fre__split_pattern(char *pattern,
 	    || (spa_ind > 1 && freg_object->fre_op_flag != MATCH)){
 	  ++token_ind;
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	  if (errno) {
+	    intern__fre__errmesg("FRE_FETCH_MODIFIERS");
+	    return FRE_ERROR;
+	  }
 	  continue;
 	}
 	else {
@@ -159,8 +165,7 @@ int intern__fre__split_pattern(char *pattern,
     else if (FRE_TOKEN == freg_object->c_delimiter){
       if (delimiter_pairs == 0){
 	/* Syntax error. */
-	errno = 0; intern__fre__errmesg("Invalid sequence of pattern delimiters");
-	errno = EINVAL;
+	errno = FRE_PATRNPDELIM;
 	return FRE_ERROR;
       }
       if (--delimiter_pairs > 0){
@@ -171,19 +176,26 @@ int intern__fre__split_pattern(char *pattern,
 	if (freg_object->fre_op_flag == MATCH){
 	  ++token_ind;
 	  FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	  if (errno) {
+	    intern__fre__errmesg("FRE_FETCH_MODIFIERS");
+	    return FRE_ERROR;
+	  }
 	  continue;
 	}
 	else{
 	  if (++spa_ind > 1) {
 	    ++token_ind;
 	    FRE_FETCH_MODIFIERS(pattern, freg_object, &token_ind);
+	    if (errno) {
+	      intern__fre__errmesg("FRE_FETCH_MODIFIERS");
+	      return FRE_ERROR;
+	    }
 	    continue;
 	  }
 	  /* Make sure the next token is an opening delimiter. */
 	  if (pattern[token_ind + 1] != freg_object->delimiter) {
 	    /* Syntax error. */
-	    errno = 0; intern__fre__errmesg("Invalid character between opening and closing pattern delimiter");
-	    errno = EINVAL;
+	    errno = FRE_MISPLACCHAR;
 	    return FRE_ERROR;
 	  }
 	}
@@ -212,7 +224,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
   size_t numof_tokens = 0;            /* Used to help register back-reference positions. */
   size_t token_ind = 0;
   size_t new_pattern_tos = 0;              /* new_pattern's top of stack. */
-  size_t new_pattern_len = strnlen(freg_object->striped_pattern[0], FRE_MAX_PATTERN_LENGHT-1);
+  size_t new_pattern_len = strnlen(freg_object->striped_pattern[is_sub], FRE_MAX_PATTERN_LENGHT-1);
   char   new_pattern[FRE_MAX_PATTERN_LENGHT]; /* The array used to build the new pattern. */
 
 #ifdef FRE_TOKEN
@@ -228,8 +240,7 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
   while (1){
     if (FRE_TOKEN == '\0'){
       if (in_bracket_exp > 0) {
-	errno = 0; intern__fre__errmesg("Unterminated '[' or '[^' expression");
-	errno = ENODATA;
+	errno = FRE_UNTERMBRAKT;
 	return FRE_ERROR;
       }
       FRE_PUSH('\0', new_pattern, &new_pattern_tos);
@@ -283,6 +294,11 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
     else if (FRE_TOKEN == '\\' && in_bracket_exp == 0) {
       FRE_CERTIFY_ESC_SEQ(is_sub, &token_ind, new_pattern, &new_pattern_tos,
 			  &new_pattern_len, freg_object);
+      if (errno){
+	if (errno == FRE_ESCSEQOVERF)
+	  errno = FRE_LENGHTADJ;
+	return FRE_ERROR;
+      }
       continue;
     }
     /* Handle comments. */
@@ -292,11 +308,12 @@ int intern__fre__perl_to_posix(fre_pattern *freg_object,
 	continue; /* Must avoid incrementing token_ind once more. */
       }
       if (FRE_TOKEN == '#') {
-	FRE_SKIP_COMMENTS(freg_object->striped_pattern[is_sub],
+	FRE_SKIP_COMMENTS(((freg_object->fre_paired_delimiters == true) ? freg_object->c_delimiter : freg_object->delimiter),
+			  freg_object->striped_pattern[is_sub],
 			  &new_pattern_len,
 			  &token_ind);
 	if (errno){
-	  intern__fre__errmesg("Fre_skip_comments");
+	  intern__fre__errmesg("FRE_SKIP_COMMENTS");
 	  return FRE_ERROR;
 	}
 	continue; /* Must avoid incrementing token_ind once more. */
